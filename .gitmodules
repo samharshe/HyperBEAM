@@ -1,0 +1,3 @@
+[submodule "native/dev_wasinn/wasmtime"]
+	path = native/dev_wasinn/wasmtime
+	url = https://github.com/bytecodealliance/wasmtime.git
