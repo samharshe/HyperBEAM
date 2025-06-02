@@ -4,6 +4,7 @@ authors = ["Saam Tehrani"]
 edition = "2021"
 
 [dependencies]
+bytemuck = "1.23.0"
 ndarray = "0.16.1"
 wit-bindgen = { version = "0.42.1", features = ["macros"] }
 wit-bindgen-rt = { version = "0.42.1", features = ["bitflags"] }

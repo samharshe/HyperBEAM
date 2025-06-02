@@ -61,6 +61,34 @@ impl Guest for MobilnetModel
         let (label, confidence) = sorted[0];
         (label as u32, confidence)
     }
+    fn infer_llm(registry_id: String, ids: Vec<u32>) {
+        let model = match MODEL.get() {
+            Some(m) => m,
+            None => {
+                let graph = load_by_name(&registry_id).unwrap();
+                MODEL
+                    .set(Self {
+                        graph,
+                    })
+                    .ok();
+                MODEL.get().unwrap()
+            },
+        };
+        let tokens_dims = &[1u32, 512u32];
+        let tokens_tensor = Tensor::new(tokens_dims, TensorType::I64, bytemuck::cast_slice(&ids));
+        
+        let input_pos: Vec<i32> = (0..512).collect();
+        let input_pos_tensor = Tensor::new(tokens_dims, TensorType::I64, bytemuck::cast_slice(&input_pos));
+
+        let kv_data = vec![0.0_f32; 32 * 2 * 1 * 16 * 10 * 64]; // size must match model expectation
+        let kv_tensor = Tensor::new(&[32, 2, 1, 16, 10, 64], TensorType::I64, bytemuck::cast_slice(&kv_data));
+        
+        let context = model.graph.init_execution_context().unwrap();
+        context.set_input("input_ids", tokens_tensor).unwrap();
+        context.set_input("1", input_pos_tensor).unwrap();
+        context.set_input("2", kv_tensor).unwrap();
+        context.compute().unwrap();
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

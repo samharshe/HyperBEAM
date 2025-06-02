@@ -30,3 +30,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 futures = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
 opencv = "0.94.4"
+tokenizers = "0.21.1"
+ndarray = "0.16.1"
+bytemuck = "1.23.0"

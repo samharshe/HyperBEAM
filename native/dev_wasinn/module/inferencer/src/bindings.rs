@@ -35,11 +35,29 @@ pub mod exports {
                     *ptr3.add(4).cast::<f32>() = _rt::as_f32(t4_1);
                     ptr3
                 }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn _export_infer_llm_cabi<T: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                ) {
+                    #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                    let len0 = arg1;
+                    let bytes0 = _rt::Vec::from_raw_parts(arg0.cast(), len0, len0);
+                    let len1 = arg3;
+                    T::infer_llm(
+                        _rt::string_lift(bytes0),
+                        _rt::Vec::from_raw_parts(arg2.cast(), len1, len1),
+                    );
+                }
                 pub trait Guest {
                     fn infer(
                         registry_id: _rt::String,
                         tensor: _rt::Vec<u8>,
                     ) -> InferResult;
+                    fn infer_llm(registry_id: _rt::String, ids: _rt::Vec<u32>) -> ();
                 }
                 #[doc(hidden)]
                 macro_rules! __export_component_inferer_mobilenet_0_1_0_cabi {
@@ -48,7 +66,12 @@ pub mod exports {
                         "component:inferer/mobilenet@0.1.0#infer")] unsafe extern "C" fn
                         export_infer(arg0 : * mut u8, arg1 : usize, arg2 : * mut u8, arg3
                         : usize,) -> * mut u8 { unsafe { $($path_to_types)*::
-                        _export_infer_cabi::<$ty > (arg0, arg1, arg2, arg3) } } };
+                        _export_infer_cabi::<$ty > (arg0, arg1, arg2, arg3) } } #[unsafe
+                        (export_name = "component:inferer/mobilenet@0.1.0#infer-llm")]
+                        unsafe extern "C" fn export_infer_llm(arg0 : * mut u8, arg1 :
+                        usize, arg2 : * mut u8, arg3 : usize,) { unsafe {
+                        $($path_to_types)*:: _export_infer_llm_cabi::<$ty > (arg0, arg1,
+                        arg2, arg3) } } };
                     };
                 }
                 #[doc(hidden)]
@@ -166,8 +189,7 @@ mod _rt {
 /// # trait Guest {}
 /// struct MyType;
 ///
-/// impl Guest for MyType
-/// {
+/// impl Guest for MyType {
 ///     // ...
 /// }
 ///
@@ -188,19 +210,21 @@ macro_rules! __export_inferer_impl {
 #[doc(inline)]
 pub(crate) use __export_inferer_impl as export;
 #[cfg(target_arch = "wasm32")]
-#[unsafe(link_section = "component-type:wit-bindgen:0.41.0:component:inferer@0.1.0:inferer:encoded world")]
+#[unsafe(
+    link_section = "component-type:wit-bindgen:0.41.0:component:inferer@0.1.0:inferer:encoded world"
+)]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 271] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\x91\x01\x01A\x02\x01\
-A\x02\x01B\x05\x01o\x02yv\x04\0\x0cinfer-result\x03\0\0\x01p}\x01@\x02\x0bregist\
-ry-ids\x06tensor\x02\0\x01\x04\0\x05infer\x01\x03\x04\0!component:inferer/mobile\
-net@0.1.0\x05\0\x04\0\x1fcomponent:inferer/inferer@0.1.0\x04\0\x0b\x0d\x01\0\x07\
-inferer\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.22\
-7.1\x10wit-bindgen-rust\x060.41.0";
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 311] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xb9\x01\x01A\x02\x01\
+A\x02\x01B\x08\x01o\x02yv\x04\0\x0cinfer-result\x03\0\0\x01p}\x01@\x02\x0bregist\
+ry-ids\x06tensor\x02\0\x01\x04\0\x05infer\x01\x03\x01py\x01@\x02\x0bregistry-ids\
+\x03ids\x04\x01\0\x04\0\x09infer-llm\x01\x05\x04\0!component:inferer/mobilenet@0\
+.1.0\x05\0\x04\0\x1fcomponent:inferer/inferer@0.1.0\x04\0\x0b\x0d\x01\0\x07infer\
+er\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.227.1\x10\
+wit-bindgen-rust\x060.41.0";
 #[inline(never)]
 #[doc(hidden)]
-pub fn __link_custom_section_describing_imports()
-{
+pub fn __link_custom_section_describing_imports() {
     wit_bindgen_rt::maybe_link_cabi_realloc();
 }
