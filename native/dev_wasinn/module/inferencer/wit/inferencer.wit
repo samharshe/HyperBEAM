@@ -3,7 +3,7 @@ package component:inferer@0.1.0;
 interface mobilenet {
     type infer-result = tuple<u32, f32>;
     infer: func(registry-id:string, tensor: list<u8>) -> infer-result;
-    infer-llm: func(registry-id:string, ids: list<u32>);
+    infer-llm: func(registry-id:string, ids: list<s64>);
 }
 
 world inferer {

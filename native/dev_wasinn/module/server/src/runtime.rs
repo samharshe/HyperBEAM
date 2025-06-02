@@ -112,7 +112,7 @@ impl WasmInstance
         Ok(InferenceResult(label, confidence))
     }
 
-    pub fn infer_llm(&mut self, ids: Vec<u32>) -> anyhow::Result<()> {
+    pub fn infer_llm(&mut self, ids: Vec<i64>) -> anyhow::Result<()> {
         let interface_idx = self
             .instance
             .get_export_index(&mut self.store, None, "component:inferer/mobilenet@0.1.0")
@@ -124,7 +124,7 @@ impl WasmInstance
             .get_export_index(&mut self.store, parent_export_idx, "infer-llm")
             .expect("Cannot find `infer` function in `component:inferer/mobilenet@0.1.0` interface");
         let func = self.instance.get_func(&mut self.store, func_idx).expect("func_idx is unexpectedly missing");
-        let infer = func.typed::<(String, Vec<u32>), ()>(&self.store)?;
+        let infer = func.typed::<(String, Vec<i64>), ()>(&self.store)?;
         infer.call(&mut self.store, (self.registry_id.clone(), ids,))?;
         Ok(())
     }
