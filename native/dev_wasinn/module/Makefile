@@ -13,6 +13,11 @@ endef
 
 PWD = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
+deps:
+	sudo apt update && sudo apt install -y llvm-dev libclang-dev clang libopencv-dev pkg-config
+	cargo install cargo-component
+	cargo install wasm-tools
+
 clean:
 	@cargo clean
 	@cd inferencer && cargo clean

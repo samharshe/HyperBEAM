@@ -189,7 +189,8 @@ mod _rt {
 /// # trait Guest {}
 /// struct MyType;
 ///
-/// impl Guest for MyType {
+/// impl Guest for MyType
+/// {
 ///     // ...
 /// }
 ///
@@ -210,9 +211,7 @@ macro_rules! __export_inferer_impl {
 #[doc(inline)]
 pub(crate) use __export_inferer_impl as export;
 #[cfg(target_arch = "wasm32")]
-#[unsafe(
-    link_section = "component-type:wit-bindgen:0.41.0:component:inferer@0.1.0:inferer:encoded world"
-)]
+#[unsafe(link_section = "component-type:wit-bindgen:0.41.0:component:inferer@0.1.0:inferer:encoded world")]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
 pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 311] = *b"\
@@ -225,6 +224,7 @@ er\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.227.1\x
 wit-bindgen-rust\x060.41.0";
 #[inline(never)]
 #[doc(hidden)]
-pub fn __link_custom_section_describing_imports() {
+pub fn __link_custom_section_describing_imports()
+{
     wit_bindgen_rt::maybe_link_cabi_realloc();
 }

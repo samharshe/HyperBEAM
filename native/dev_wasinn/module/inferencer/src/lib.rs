@@ -62,7 +62,8 @@ impl Guest for MobilnetModel
         (label as u32, confidence)
     }
 
-    fn infer_llm(registry_id: String, ids: Vec<i64>) {
+    fn infer_llm(registry_id: String, ids: Vec<i64>)
+    {
         let model = match MODEL.get() {
             Some(m) => m,
             None => {
@@ -80,13 +81,20 @@ impl Guest for MobilnetModel
         let tokens_dims = &[1u32, length as u32];
         let i = i64_vec_to_bytes(ids.clone());
         let tokens_tensor = Tensor::new(tokens_dims, TensorType::I64, &i);
-        
+
         let input_pos: Vec<i64> = (0..length as i64).collect();
         let i = i64_vec_to_bytes(input_pos);
         let input_pos_tensor = Tensor::new(tokens_dims, TensorType::I64, &i);
-       
-        let mut am: Vec<i64> = ids.iter()
-            .map(|&id| if id == 128009 { 0 } else { 1 })
+
+        let mut am: Vec<i64> = ids
+            .iter()
+            .map(|&id| {
+                if id == 128009 {
+                    0
+                } else {
+                    1
+                }
+            })
             .collect();
 
         while am.len() < length {
@@ -94,7 +102,7 @@ impl Guest for MobilnetModel
         }
         let i = i64_vec_to_bytes(am);
         let am_tensor = Tensor::new(tokens_dims, TensorType::I64, &i);
-        
+
         let context = model.graph.init_execution_context().unwrap();
         context.set_input("input_ids", tokens_tensor).unwrap();
         context.set_input("position_ids", input_pos_tensor).unwrap();
@@ -110,28 +118,24 @@ impl Guest for MobilnetModel
         let seq_len = dims[1];
         let vocab_size = 128_256;
         let logits_f32: &[f32] = bytemuck::cast_slice(&data);
-        
+
         let mut token_ids = Vec::with_capacity(seq_len.try_into().unwrap());
         for i in 0..seq_len {
             let start = (i * vocab_size) as usize;
             let end = start + (vocab_size as usize);
             let logits: &_ = &logits_f32[start..end];
-            let (max_index, _) = logits
-                .iter()
-                .enumerate()
-                .max_by(|a, b| a.1.total_cmp(b.1))
-                .unwrap();
+            let (max_index, _) = logits.iter().enumerate().max_by(|a, b| a.1.total_cmp(b.1)).unwrap();
             token_ids.push(max_index as u32);
         }
         println!("{:?}", token_ids);
-
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct InferenceResult(pub usize, pub f32);
 
-pub fn i64_vec_to_bytes(data: Vec<i64>) -> Vec<u8> {
+pub fn i64_vec_to_bytes(data: Vec<i64>) -> Vec<u8>
+{
     let chunks: Vec<[u8; 8]> = data.into_iter().map(|f| f.to_le_bytes()).collect();
     let result: Vec<u8> = chunks.iter().flatten().copied().collect();
     result
