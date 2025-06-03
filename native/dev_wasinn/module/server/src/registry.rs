@@ -15,8 +15,7 @@ impl Registry
         if !path.is_dir() {
             bail!("preload directory is not a valid directory: {}", path.display());
         }
-        println!("here");
-        let graph = backend.load_from_dir(path, ExecutionTarget::Cpu)?;
+        let graph = backend.load_from_dir(path, ExecutionTarget::Gpu)?;
         self.0.insert(registry_id.to_owned(), graph);
         Ok(())
     }

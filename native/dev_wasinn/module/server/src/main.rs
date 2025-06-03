@@ -46,21 +46,17 @@ fn main() -> Result<()>
             break;
         }
         // prepare the tensor
-        let prompt = r#"<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-
-        You are a helpful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>
-
-        What is the capital of France?<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-
-        "#;
-        let encoding = tokenizer.encode(prompt, true).unwrap();
+        let prompt = format!(r#"<|begin_of_text|><|start_header_id|>system<|end_header_id|> 
+        You are a helpful assistant<|eot_id|><|start_header_id|>user<|end_header_id|>
+        {}<|eot_id|>
+        <|start_header_id|>assistant<|end_header_id|>
+        "#, input);
+        let encoding = tokenizer.encode(prompt, false).unwrap();
         let ids = encoding.get_ids().iter().map(|&id| id as i64).collect();
-        println!("Input IDs: {:?}", encoding.get_ids());
-
         let mut instance = WasmInstance::new(engine.clone(), module.clone(), "llama3.1-8b-instruct")?;
 
         let result = instance.infer_llm(ids)?;
-        let response = "awaiting!";
+        let response = tokenizer.decode(&result, false).unwrap();
         writeln!(stdout, "Bot: {}\n", response)?;
         stdout.flush()?;
     }

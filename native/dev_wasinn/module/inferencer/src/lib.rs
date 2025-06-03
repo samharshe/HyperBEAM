@@ -62,7 +62,7 @@ impl Guest for MobilnetModel
         (label as u32, confidence)
     }
 
-    fn infer_llm(registry_id: String, ids: Vec<i64>)
+    fn infer_llm(registry_id: String, ids: Vec<i64>) -> Vec<u32>
     {
         let model = match MODEL.get() {
             Some(m) => m,
@@ -76,7 +76,6 @@ impl Guest for MobilnetModel
                 MODEL.get().unwrap()
             },
         };
-        print!("{:?}", ids);
         let length = ids.len();
         let tokens_dims = &[1u32, length as u32];
         let i = i64_vec_to_bytes(ids.clone());
@@ -89,17 +88,13 @@ impl Guest for MobilnetModel
         let mut am: Vec<i64> = ids
             .iter()
             .map(|&id| {
-                if id == 128009 {
-                    0
-                } else {
-                    1
+                match id {
+                    128000..=128255 => 0,
+                    _ => 1
                 }
             })
             .collect();
 
-        while am.len() < length {
-            am.push(0);
-        }
         let i = i64_vec_to_bytes(am);
         let am_tensor = Tensor::new(tokens_dims, TensorType::I64, &i);
 
@@ -112,23 +107,49 @@ impl Guest for MobilnetModel
         let output = context.get_output("logits").unwrap();
         let data = output.data();
         let dims = output.dimensions();
-        println!("{:?}", dims);
-        println!("{}", data.len());
 
+        let batch_len = dims[0];
         let seq_len = dims[1];
-        let vocab_size = 128_256;
-        let logits_f32: &[f32] = bytemuck::cast_slice(&data);
+        let vocab_size = dims[2];
+        
+        let mut logits_f32: Vec<f32> = bytes_to_f32_vec(data);
 
         let mut token_ids = Vec::with_capacity(seq_len.try_into().unwrap());
         for i in 0..seq_len {
             let start = (i * vocab_size) as usize;
             let end = start + (vocab_size as usize);
-            let logits: &_ = &logits_f32[start..end];
-            let (max_index, _) = logits.iter().enumerate().max_by(|a, b| a.1.total_cmp(b.1)).unwrap();
-            token_ids.push(max_index as u32);
+            let mut logits = &mut logits_f32[start..end];
+            softmax(logits);
+
+            let (token_id, prob) = logits
+                .iter()
+                .enumerate()
+                .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+                .unwrap();
+            token_ids.push(token_id as u32);
         }
-        println!("{:?}", token_ids);
+        token_ids
     }
+}
+
+pub fn softmax(x: &mut [f32]){
+    let mut sum: f32 = 0.0;
+    let mut max_val: f32 = x[0];
+
+    for i in x.iter() {
+        if *i > max_val {
+            max_val = *i;
+        }
+    }
+
+    for i in x.iter_mut() {
+        *i = (*i - max_val).exp();
+        sum += *i;
+    }
+    
+    for i in x.iter_mut() {
+        *i /= sum;
+    } 
 }
 
 #[derive(Debug, PartialEq, Clone)]
