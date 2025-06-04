@@ -107,28 +107,31 @@ impl Guest for MobilnetModel
         let output = context.get_output("logits").unwrap();
         let data = output.data();
         let dims = output.dimensions();
-
         let batch_len = dims[0];
         let seq_len = dims[1];
         let vocab_size = dims[2];
         
         let mut logits_f32: Vec<f32> = bytes_to_f32_vec(data);
 
-        let mut token_ids = Vec::with_capacity(seq_len.try_into().unwrap());
-        for i in 0..seq_len {
-            let start = (i * vocab_size) as usize;
-            let end = start + (vocab_size as usize);
-            let mut logits = &mut logits_f32[start..end];
-            softmax(logits);
+        
+        // only process the last position's logits for autoregressive generation
+        let last_pos = seq_len - 1;
+        let start = (last_pos * vocab_size) as usize;
+        let end = start + (vocab_size as usize);
+        let mut logits = &mut logits_f32[start..end];
+        
+        softmax(logits);
 
-            let (token_id, prob) = logits
-                .iter()
-                .enumerate()
-                .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
-                .unwrap();
-            token_ids.push(token_id as u32);
-        }
-        token_ids
+        let (token_id, prob) = logits
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            .unwrap();
+        
+        eprintln!("DEBUG: Selected token ID {} with probability {}", token_id, prob);
+        
+        // return only the single next token
+        vec![token_id as u32]
     }
 }
 
