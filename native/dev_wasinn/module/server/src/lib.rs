@@ -1,3 +1,4 @@
+mod ncl_ml;
 pub mod registry;
 pub mod runtime;
 pub mod tensor;
@@ -187,9 +188,9 @@ pub async fn start_server(port: u16, wasm_module_path: String) -> anyhow::Result
             let engine = Arc::clone(&engine);
             let module = Arc::clone(&module);
             spawn_blocking(move || -> anyhow::Result<()> {
-                let mut instance = WasmInstance::new(engine, module, "llama3.2-1b-kvc-fp16")?;
-                let result = instance.infer(request.tensor_bytes)?;
-                let _ = request.responder.send(result);
+                let instance = WasmInstance::new(engine, module, "llama3.2-1b-kvc-fp16")?;
+                // let result = instance.infer(request.tensor_bytes)?;
+                // let _ = request.responder.send(result);
                 Ok(())
             });
         }

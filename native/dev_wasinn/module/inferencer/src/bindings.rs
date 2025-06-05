@@ -3,115 +3,231 @@
 //   * runtime_path: "wit_bindgen_rt"
 #[rustfmt::skip]
 #[allow(dead_code, clippy::all)]
+pub mod ncl {
+    pub mod ml {
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod types {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            /// assuming size_of(u32) as max vocabulary size
+            pub type TokenId = u32;
+            /// sessions unique identifier
+            pub type SessionId = u64;
+            /// configurations for a session
+            #[derive(Clone)]
+            pub struct SessionConfig {
+                pub model_id: _rt::String,
+                pub history: Option<_rt::Vec<u8>>,
+                pub max_token: Option<u16>,
+            }
+            impl ::core::fmt::Debug for SessionConfig {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("SessionConfig")
+                        .field("model-id", &self.model_id)
+                        .field("history", &self.history)
+                        .field("max-token", &self.max_token)
+                        .finish()
+                }
+            }
+            #[repr(u8)]
+            #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+            pub enum Errors {
+                /// invalid session-id.
+                InvalidSession,
+                /// Host indicating that guest should abort the session.
+                AbortSession,
+            }
+            impl Errors {
+                pub fn name(&self) -> &'static str {
+                    match self {
+                        Errors::InvalidSession => "invalid-session",
+                        Errors::AbortSession => "abort-session",
+                    }
+                }
+                pub fn message(&self) -> &'static str {
+                    match self {
+                        Errors::InvalidSession => "invalid session-id.",
+                        Errors::AbortSession => {
+                            "Host indicating that guest should abort the session."
+                        }
+                    }
+                }
+            }
+            impl ::core::fmt::Debug for Errors {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("Errors")
+                        .field("code", &(*self as i32))
+                        .field("name", &self.name())
+                        .field("message", &self.message())
+                        .finish()
+                }
+            }
+            impl ::core::fmt::Display for Errors {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    write!(f, "{} (error {})", self.name(), * self as i32)
+                }
+            }
+            impl std::error::Error for Errors {}
+            impl Errors {
+                #[doc(hidden)]
+                pub unsafe fn _lift(val: u8) -> Errors {
+                    if !cfg!(debug_assertions) {
+                        return ::core::mem::transmute(val);
+                    }
+                    match val {
+                        0 => Errors::InvalidSession,
+                        1 => Errors::AbortSession,
+                        _ => panic!("invalid enum discriminant"),
+                    }
+                }
+            }
+        }
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod token_generator {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            pub type TokenId = super::super::super::ncl::ml::types::TokenId;
+            pub type SessionId = super::super::super::ncl::ml::types::SessionId;
+            #[allow(unused_unsafe, clippy::all)]
+            pub fn generate(session: SessionId, token: TokenId) -> u32 {
+                unsafe {
+                    #[cfg(target_arch = "wasm32")]
+                    #[link(wasm_import_module = "ncl:ml/token-generator@0.1.0")]
+                    unsafe extern "C" {
+                        #[link_name = "generate"]
+                        fn wit_import0(_: i64, _: i32) -> i32;
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    unsafe extern "C" fn wit_import0(_: i64, _: i32) -> i32 {
+                        unreachable!()
+                    }
+                    let ret = unsafe {
+                        wit_import0(_rt::as_i64(session), _rt::as_i32(token))
+                    };
+                    ret as u32
+                }
+            }
+        }
+    }
+}
+#[rustfmt::skip]
+#[allow(dead_code, clippy::all)]
 pub mod exports {
-    pub mod component {
-        pub mod inferer {
+    pub mod ncl {
+        pub mod ml {
             #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
-            pub mod mobilenet {
+            pub mod chatbot {
                 #[used]
                 #[doc(hidden)]
                 static __FORCE_SECTION_REF: fn() = super::super::super::super::__link_custom_section_describing_imports;
                 use super::super::super::super::_rt;
-                pub type InferResult = (u32, f32);
+                pub type SessionId = super::super::super::super::ncl::ml::types::SessionId;
+                pub type SessionConfig = super::super::super::super::ncl::ml::types::SessionConfig;
+                pub type Errors = super::super::super::super::ncl::ml::types::Errors;
                 #[doc(hidden)]
                 #[allow(non_snake_case)]
                 pub unsafe fn _export_infer_cabi<T: Guest>(
-                    arg0: *mut u8,
-                    arg1: usize,
-                    arg2: *mut u8,
-                    arg3: usize,
+                    arg0: i64,
+                    arg1: *mut u8,
+                    arg2: usize,
                 ) -> *mut u8 {
                     #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
-                    let len0 = arg1;
-                    let bytes0 = _rt::Vec::from_raw_parts(arg0.cast(), len0, len0);
-                    let len1 = arg3;
-                    let result2 = T::infer(
-                        _rt::string_lift(bytes0),
-                        _rt::Vec::from_raw_parts(arg2.cast(), len1, len1),
+                    let len0 = arg2;
+                    let result1 = T::infer(
+                        arg0 as u64,
+                        _rt::Vec::from_raw_parts(arg1.cast(), len0, len0),
                     );
-                    let ptr3 = (&raw mut _RET_AREA.0).cast::<u8>();
-                    let (t4_0, t4_1) = result2;
-                    *ptr3.add(0).cast::<i32>() = _rt::as_i32(t4_0);
-                    *ptr3.add(4).cast::<f32>() = _rt::as_f32(t4_1);
-                    ptr3
+                    let ptr2 = (&raw mut _RET_AREA.0).cast::<u8>();
+                    match result1 {
+                        Ok(_) => {
+                            *ptr2.add(0).cast::<u8>() = (0i32) as u8;
+                        }
+                        Err(e) => {
+                            *ptr2.add(0).cast::<u8>() = (1i32) as u8;
+                            *ptr2.add(1).cast::<u8>() = (e.clone() as i32) as u8;
+                        }
+                    };
+                    ptr2
                 }
                 #[doc(hidden)]
                 #[allow(non_snake_case)]
-                pub unsafe fn _export_infer_llm_cabi<T: Guest>(
+                pub unsafe fn _export_register_cabi<T: Guest>(
                     arg0: *mut u8,
                     arg1: usize,
-                    arg2: *mut u8,
-                    arg3: usize,
-                ) -> *mut u8 {
+                    arg2: i32,
+                    arg3: *mut u8,
+                    arg4: usize,
+                    arg5: i32,
+                    arg6: i32,
+                ) -> i64 {
                     #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
                     let len0 = arg1;
                     let bytes0 = _rt::Vec::from_raw_parts(arg0.cast(), len0, len0);
-                    let len1 = arg3;
-                    let result2 = T::infer_llm(
-                        _rt::string_lift(bytes0),
-                        _rt::Vec::from_raw_parts(arg2.cast(), len1, len1),
-                    );
-                    let ptr3 = (&raw mut _RET_AREA.0).cast::<u8>();
-                    let vec4 = (result2).into_boxed_slice();
-                    let ptr4 = vec4.as_ptr().cast::<u8>();
-                    let len4 = vec4.len();
-                    ::core::mem::forget(vec4);
-                    *ptr3.add(::core::mem::size_of::<*const u8>()).cast::<usize>() = len4;
-                    *ptr3.add(0).cast::<*mut u8>() = ptr4.cast_mut();
-                    ptr3
-                }
-                #[doc(hidden)]
-                #[allow(non_snake_case)]
-                pub unsafe fn __post_return_infer_llm<T: Guest>(arg0: *mut u8) {
-                    let l0 = *arg0.add(0).cast::<*mut u8>();
-                    let l1 = *arg0
-                        .add(::core::mem::size_of::<*const u8>())
-                        .cast::<usize>();
-                    let base2 = l0;
-                    let len2 = l1;
-                    _rt::cabi_dealloc(base2, len2 * 4, 4);
+                    let result2 = T::register(super::super::super::super::ncl::ml::types::SessionConfig {
+                        model_id: _rt::string_lift(bytes0),
+                        history: match arg2 {
+                            0 => None,
+                            1 => {
+                                let e = {
+                                    let len1 = arg4;
+                                    _rt::Vec::from_raw_parts(arg3.cast(), len1, len1)
+                                };
+                                Some(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        },
+                        max_token: match arg5 {
+                            0 => None,
+                            1 => {
+                                let e = arg6 as u16;
+                                Some(e)
+                            }
+                            _ => _rt::invalid_enum_discriminant(),
+                        },
+                    });
+                    _rt::as_i64(result2)
                 }
                 pub trait Guest {
                     fn infer(
-                        registry_id: _rt::String,
-                        tensor: _rt::Vec<u8>,
-                    ) -> InferResult;
-                    fn infer_llm(
-                        registry_id: _rt::String,
-                        ids: _rt::Vec<i64>,
-                    ) -> _rt::Vec<u32>;
+                        session: SessionId,
+                        prompt: _rt::Vec<i64>,
+                    ) -> Result<(), Errors>;
+                    fn register(config: SessionConfig) -> SessionId;
                 }
                 #[doc(hidden)]
-                macro_rules! __export_component_inferer_mobilenet_0_1_0_cabi {
+                macro_rules! __export_ncl_ml_chatbot_0_1_0_cabi {
                     ($ty:ident with_types_in $($path_to_types:tt)*) => {
                         const _ : () = { #[unsafe (export_name =
-                        "component:inferer/mobilenet@0.1.0#infer")] unsafe extern "C" fn
-                        export_infer(arg0 : * mut u8, arg1 : usize, arg2 : * mut u8, arg3
-                        : usize,) -> * mut u8 { unsafe { $($path_to_types)*::
-                        _export_infer_cabi::<$ty > (arg0, arg1, arg2, arg3) } } #[unsafe
-                        (export_name = "component:inferer/mobilenet@0.1.0#infer-llm")]
-                        unsafe extern "C" fn export_infer_llm(arg0 : * mut u8, arg1 :
-                        usize, arg2 : * mut u8, arg3 : usize,) -> * mut u8 { unsafe {
-                        $($path_to_types)*:: _export_infer_llm_cabi::<$ty > (arg0, arg1,
-                        arg2, arg3) } } #[unsafe (export_name =
-                        "cabi_post_component:inferer/mobilenet@0.1.0#infer-llm")] unsafe
-                        extern "C" fn _post_return_infer_llm(arg0 : * mut u8,) { unsafe {
-                        $($path_to_types)*:: __post_return_infer_llm::<$ty > (arg0) } }
-                        };
+                        "ncl:ml/chatbot@0.1.0#infer")] unsafe extern "C" fn
+                        export_infer(arg0 : i64, arg1 : * mut u8, arg2 : usize,) -> * mut
+                        u8 { unsafe { $($path_to_types)*:: _export_infer_cabi::<$ty >
+                        (arg0, arg1, arg2) } } #[unsafe (export_name =
+                        "ncl:ml/chatbot@0.1.0#register")] unsafe extern "C" fn
+                        export_register(arg0 : * mut u8, arg1 : usize, arg2 : i32, arg3 :
+                        * mut u8, arg4 : usize, arg5 : i32, arg6 : i32,) -> i64 { unsafe
+                        { $($path_to_types)*:: _export_register_cabi::<$ty > (arg0, arg1,
+                        arg2, arg3, arg4, arg5, arg6) } } };
                     };
                 }
                 #[doc(hidden)]
-                pub(crate) use __export_component_inferer_mobilenet_0_1_0_cabi;
-                #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
-                #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
-                struct _RetArea(
-                    [::core::mem::MaybeUninit<
-                        u8,
-                    >; 2 * ::core::mem::size_of::<*const u8>()],
-                );
+                pub(crate) use __export_ncl_ml_chatbot_0_1_0_cabi;
+                #[repr(align(1))]
+                struct _RetArea([::core::mem::MaybeUninit<u8>; 2]);
                 static mut _RET_AREA: _RetArea = _RetArea(
-                    [::core::mem::MaybeUninit::uninit(); 2
-                        * ::core::mem::size_of::<*const u8>()],
+                    [::core::mem::MaybeUninit::uninit(); 2],
                 );
             }
         }
@@ -120,16 +236,29 @@ pub mod exports {
 #[rustfmt::skip]
 mod _rt {
     #![allow(dead_code, clippy::all)]
-    #[cfg(target_arch = "wasm32")]
-    pub fn run_ctors_once() {
-        wit_bindgen_rt::run_ctors_once();
-    }
+    pub use alloc_crate::string::String;
     pub use alloc_crate::vec::Vec;
-    pub unsafe fn string_lift(bytes: Vec<u8>) -> String {
-        if cfg!(debug_assertions) {
-            String::from_utf8(bytes).unwrap()
-        } else {
-            String::from_utf8_unchecked(bytes)
+    pub fn as_i64<T: AsI64>(t: T) -> i64 {
+        t.as_i64()
+    }
+    pub trait AsI64 {
+        fn as_i64(self) -> i64;
+    }
+    impl<'a, T: Copy + AsI64> AsI64 for &'a T {
+        fn as_i64(self) -> i64 {
+            (*self).as_i64()
+        }
+    }
+    impl AsI64 for i64 {
+        #[inline]
+        fn as_i64(self) -> i64 {
+            self as i64
+        }
+    }
+    impl AsI64 for u64 {
+        #[inline]
+        fn as_i64(self) -> i64 {
+            self as i64
         }
     }
     pub fn as_i32<T: AsI32>(t: T) -> i32 {
@@ -191,33 +320,25 @@ mod _rt {
             self as i32
         }
     }
-    pub fn as_f32<T: AsF32>(t: T) -> f32 {
-        t.as_f32()
+    #[cfg(target_arch = "wasm32")]
+    pub fn run_ctors_once() {
+        wit_bindgen_rt::run_ctors_once();
     }
-    pub trait AsF32 {
-        fn as_f32(self) -> f32;
-    }
-    impl<'a, T: Copy + AsF32> AsF32 for &'a T {
-        fn as_f32(self) -> f32 {
-            (*self).as_f32()
+    pub unsafe fn string_lift(bytes: Vec<u8>) -> String {
+        if cfg!(debug_assertions) {
+            String::from_utf8(bytes).unwrap()
+        } else {
+            String::from_utf8_unchecked(bytes)
         }
     }
-    impl AsF32 for f32 {
-        #[inline]
-        fn as_f32(self) -> f32 {
-            self as f32
+    pub unsafe fn invalid_enum_discriminant<T>() -> T {
+        if cfg!(debug_assertions) {
+            panic!("invalid enum discriminant")
+        } else {
+            unsafe { core::hint::unreachable_unchecked() }
         }
-    }
-    pub use alloc_crate::string::String;
-    pub unsafe fn cabi_dealloc(ptr: *mut u8, size: usize, align: usize) {
-        if size == 0 {
-            return;
-        }
-        let layout = alloc::Layout::from_size_align_unchecked(size, align);
-        alloc::dealloc(ptr, layout);
     }
     extern crate alloc as alloc_crate;
-    pub use alloc_crate::alloc;
 }
 /// Generates `#[unsafe(no_mangle)]` functions to export the specified type as
 /// the root implementation of all generated traits.
@@ -229,7 +350,8 @@ mod _rt {
 /// # trait Guest {}
 /// struct MyType;
 ///
-/// impl Guest for MyType {
+/// impl Guest for MyType
+/// {
 ///     // ...
 /// }
 ///
@@ -237,34 +359,41 @@ mod _rt {
 /// ```
 #[allow(unused_macros)]
 #[doc(hidden)]
-macro_rules! __export_inferer_impl {
+macro_rules! __export_ml_impl {
     ($ty:ident) => {
         self::export!($ty with_types_in self);
     };
     ($ty:ident with_types_in $($path_to_types_root:tt)*) => {
         $($path_to_types_root)*::
-        exports::component::inferer::mobilenet::__export_component_inferer_mobilenet_0_1_0_cabi!($ty
-        with_types_in $($path_to_types_root)*:: exports::component::inferer::mobilenet);
+        exports::ncl::ml::chatbot::__export_ncl_ml_chatbot_0_1_0_cabi!($ty with_types_in
+        $($path_to_types_root)*:: exports::ncl::ml::chatbot);
     };
 }
 #[doc(inline)]
-pub(crate) use __export_inferer_impl as export;
+pub(crate) use __export_ml_impl as export;
 #[cfg(target_arch = "wasm32")]
-#[unsafe(
-    link_section = "component-type:wit-bindgen:0.41.0:component:inferer@0.1.0:inferer:encoded world"
-)]
+#[unsafe(link_section = "component-type:wit-bindgen:0.41.0:ncl:ml@0.1.0:ml:encoded world")]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 314] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xbc\x01\x01A\x02\x01\
-A\x02\x01B\x09\x01o\x02yv\x04\0\x0cinfer-result\x03\0\0\x01p}\x01@\x02\x0bregist\
-ry-ids\x06tensor\x02\0\x01\x04\0\x05infer\x01\x03\x01px\x01py\x01@\x02\x0bregist\
-ry-ids\x03ids\x04\0\x05\x04\0\x09infer-llm\x01\x06\x04\0!component:inferer/mobil\
-enet@0.1.0\x05\0\x04\0\x1fcomponent:inferer/inferer@0.1.0\x04\0\x0b\x0d\x01\0\x07\
-inferer\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-component\x070.22\
-7.1\x10wit-bindgen-rust\x060.41.0";
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 639] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\x86\x04\x01A\x02\x01\
+A\x0a\x01B\x0b\x01y\x04\0\x08token-id\x03\0\0\x01w\x04\0\x0asession-id\x03\0\x02\
+\x01p}\x01k\x04\x01k{\x01r\x03\x08model-ids\x07history\x05\x09max-token\x06\x04\0\
+\x0esession-config\x03\0\x07\x01m\x02\x0finvalid-session\x0dabort-session\x04\0\x06\
+errors\x03\0\x09\x03\0\x12ncl:ml/types@0.1.0\x05\0\x02\x03\0\0\x08token-id\x02\x03\
+\0\0\x0asession-id\x01B\x06\x02\x03\x02\x01\x01\x04\0\x08token-id\x03\0\0\x02\x03\
+\x02\x01\x02\x04\0\x0asession-id\x03\0\x02\x01@\x02\x07session\x03\x05token\x01\0\
+y\x04\0\x08generate\x01\x04\x03\0\x1cncl:ml/token-generator@0.1.0\x05\x03\x02\x03\
+\0\0\x0esession-config\x02\x03\0\0\x06errors\x01B\x0c\x02\x03\x02\x01\x02\x04\0\x0a\
+session-id\x03\0\0\x02\x03\x02\x01\x04\x04\0\x0esession-config\x03\0\x02\x02\x03\
+\x02\x01\x05\x04\0\x06errors\x03\0\x04\x01px\x01j\0\x01\x05\x01@\x02\x07session\x01\
+\x06prompt\x06\0\x07\x04\0\x05infer\x01\x08\x01@\x01\x06config\x03\0\x01\x04\0\x08\
+register\x01\x09\x04\0\x14ncl:ml/chatbot@0.1.0\x05\x06\x04\0\x0fncl:ml/ml@0.1.0\x04\
+\0\x0b\x08\x01\0\x02ml\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-co\
+mponent\x070.227.1\x10wit-bindgen-rust\x060.41.0";
 #[inline(never)]
 #[doc(hidden)]
-pub fn __link_custom_section_describing_imports() {
+pub fn __link_custom_section_describing_imports()
+{
     wit_bindgen_rt::maybe_link_cabi_realloc();
 }
