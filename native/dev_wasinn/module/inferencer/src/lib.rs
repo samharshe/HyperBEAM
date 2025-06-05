@@ -76,62 +76,77 @@ impl Guest for MobilnetModel
                 MODEL.get().unwrap()
             },
         };
-        let length = ids.len();
-        let tokens_dims = &[1u32, length as u32];
-        let i = i64_vec_to_bytes(ids.clone());
-        let tokens_tensor = Tensor::new(tokens_dims, TensorType::I64, &i);
+        let max_tokens = 50;
+        // I am not sure what the difference is; both of these seem intended to terminate token generation; we stop on either of them below
+        let end_of_text = 128001;
+        let eot_id = 128009;
+        let mut generated_tokens = Vec::new();
+        let mut ids = ids.clone();
+        for i in 0..max_tokens {
+            let length = ids.len();
+            let tokens_dims = &[1u32, length as u32];
+            let i = i64_vec_to_bytes(ids.clone());
+            let tokens_tensor = Tensor::new(tokens_dims, TensorType::I64, &i);
 
-        let input_pos: Vec<i64> = (0..length as i64).collect();
-        let i = i64_vec_to_bytes(input_pos);
-        let input_pos_tensor = Tensor::new(tokens_dims, TensorType::I64, &i);
+            let input_pos: Vec<i64> = (0..length as i64).collect();
+            let i = i64_vec_to_bytes(input_pos);
+            let input_pos_tensor = Tensor::new(tokens_dims, TensorType::I64, &i);
 
-        let mut am: Vec<i64> = ids
-            .iter()
-            .map(|&id| {
-                match id {
-                    128000..=128255 => 0,
-                    _ => 1
-                }
-            })
-            .collect();
+            let mut am: Vec<i64> = ids
+                .iter()
+                .map(|&id| {
+                    match id {
+                        128000..=128255 => 0,
+                        _ => 1
+                    }
+                })
+                .collect();
 
-        let i = i64_vec_to_bytes(am);
-        let am_tensor = Tensor::new(tokens_dims, TensorType::I64, &i);
+            let i = i64_vec_to_bytes(am);
+            let am_tensor = Tensor::new(tokens_dims, TensorType::I64, &i);
 
-        let context = model.graph.init_execution_context().unwrap();
-        context.set_input("input_ids", tokens_tensor).unwrap();
-        context.set_input("position_ids", input_pos_tensor).unwrap();
-        context.set_input("attention_mask", am_tensor).unwrap();
-        context.compute().unwrap();
+            let context = model.graph.init_execution_context().unwrap();
+            context.set_input("input_ids", tokens_tensor).unwrap();
+            context.set_input("position_ids", input_pos_tensor).unwrap();
+            context.set_input("attention_mask", am_tensor).unwrap();
+            context.compute().unwrap();
 
-        let output = context.get_output("logits").unwrap();
-        let data = output.data();
-        let dims = output.dimensions();
-        let batch_len = dims[0];
-        let seq_len = dims[1];
-        let vocab_size = dims[2];
-        
-        let mut logits_f32: Vec<f32> = bytes_to_f32_vec(data);
+            let output = context.get_output("logits").unwrap();
+            let data = output.data();
+            let dims = output.dimensions();
+            let batch_len = dims[0];
+            let seq_len = dims[1];
+            let vocab_size = dims[2];
+            
+            let mut logits_f32: Vec<f32> = bytes_to_f32_vec(data);
 
-        
-        // only process the last position's logits for autoregressive generation
-        let last_pos = seq_len - 1;
-        let start = (last_pos * vocab_size) as usize;
-        let end = start + (vocab_size as usize);
-        let mut logits = &mut logits_f32[start..end];
-        
-        softmax(logits);
+            
+            // only process the last position's logits for autoregressive generation
+            let last_pos = seq_len - 1;
+            let start = (last_pos * vocab_size) as usize;
+            let end = start + (vocab_size as usize);
+            let mut logits = &mut logits_f32[start..end];
+            
+            softmax(logits);
 
-        let (token_id, prob) = logits
-            .iter()
-            .enumerate()
-            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
-            .unwrap();
-        
-        eprintln!("DEBUG: Selected token ID {} with probability {}", token_id, prob);
-        
-        // return only the single next token
-        vec![token_id as u32]
+            let (token_id, prob) = logits
+                .iter()
+                .enumerate()
+                .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+                .unwrap();
+            
+            eprintln!("DEBUG: Selected token ID {} with probability {}", token_id, prob);
+            generated_tokens.push(token_id.try_into().unwrap());
+            eprintln!("tokens: {:?}", generated_tokens);
+            // check for end-of-sequence token
+            if token_id == end_of_text || token_id == eot_id {
+                eprintln!("DEBUG main: end-of-sequence token generated; stopping.");
+                break;
+            }
+            ids.push(token_id as i64);
+        }
+
+        generated_tokens
     }
 }
 

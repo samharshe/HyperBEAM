@@ -127,6 +127,8 @@ impl WasmInstance
         let func = self.instance.get_func(&mut self.store, func_idx).expect("func_idx is unexpectedly missing");
         let infer = func.typed::<(String, Vec<i64>), (Vec<u32>,)>(&self.store)?;
         let (result,) = infer.call(&mut self.store, (self.registry_id.clone(), ids))?;
+        infer.post_return(&mut self.store)?;
+
         Ok(result)
     }
 }
