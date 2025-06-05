@@ -107,22 +107,38 @@ impl WasmInstance
 
     pub fn register(&mut self) -> anyhow::Result<(u64, UnboundedReceiver<u32>)>
     {
-        let guest = self.ncl_ml_world.ncl_ml_chatbot();
-        let result = guest.call_register(
-            &mut self.store,
-            &SessionConfig {
-                model_id: self.registry_id.clone(),
-                max_token: Some(10),
-                history: None,
-            },
-        )?;
-        let ctx = self.store.data_mut();
-        Ok((result, ctx.ncl_ml.new_session(result)))
+        let interface_idx = self
+            .instance
+            .get_export_index(&mut self.store, None, "component:inferer/mobilenet@0.1.0")
+            .expect("Cannot get `component:inferer/mobilenet@0.1.0` interface");
+
+        let parent_export_idx = Some(&interface_idx);
+        let func_idx = self
+            .instance
+            .get_export_index(&mut self.store, parent_export_idx, "infer")
+            .expect("Cannot find `infer` function in `component:inferer/mobilenet@0.1.0` interface");
+        let func = self.instance.get_func(&mut self.store, func_idx).expect("func_idx is unexpectedly missing");
+        let infer = func.typed::<(String, Vec<u8>), ((u32, f32),)>(&self.store)?;
+        let ((label, confidence),) = infer.call(&mut self.store, (self.registry_id.clone(), tensor_bytes))?;
+        infer.post_return(&mut self.store)?;
+        Ok(InferenceResult(label, confidence))
     }
     pub fn infer_llm(&mut self, session_id: u64, ids: Vec<i64>) -> anyhow::Result<Vec<u32>>
     {
-        let guest = self.ncl_ml_world.ncl_ml_chatbot();
-        let result = guest.call_infer(&mut self.store, session_id, &ids)?;
-        Ok(vec![])
+        let interface_idx = self
+            .instance
+            .get_export_index(&mut self.store, None, "component:inferer/mobilenet@0.1.0")
+            .expect("Cannot get `component:inferer/mobilenet@0.1.0` interface");
+
+        let parent_export_idx = Some(&interface_idx);
+        let func_idx = self
+            .instance
+            .get_export_index(&mut self.store, parent_export_idx, "infer-llm")
+            .expect("Cannot find `infer` function in `component:inferer/mobilenet@0.1.0` interface");
+        let func = self.instance.get_func(&mut self.store, func_idx).expect("func_idx is unexpectedly missing");
+        let infer = func.typed::<(String, Vec<i64>), (Vec<u32>,)>(&self.store)?;
+        let (result,) = infer.call(&mut self.store, (self.registry_id.clone(), ids))?;
+        infer.post_return(&mut self.store)?;
+        Ok(result)
     }
 }
