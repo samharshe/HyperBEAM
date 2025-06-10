@@ -64,23 +64,33 @@ chatForm.addEventListener('submit', async function(e) {
     addMessage(userMessage, true);
     userPromptInput.value = '';
     
-    // Create response message that will be updated in real-time
+    // Create response message with animated loading dots
     const responseMessage = addMessage('', false);
     let responseText = '';
+    let isStreaming = true;
     
-    // Create a new EventSource to listen for streaming tokens
+    // Get model name from the request
+    const modelName = 'llama3.1-8b-instruct';
+    
+    // Create typing indicator
+    const typingIndicator = document.createElement('div');
+    typingIndicator.className = 'typing-indicator';
+    typingIndicator.textContent = `${modelName} is typing...`;
+    typingIndicator.style.cssText = 'font-size: 12px; color: #666; margin-top: 2px; opacity: 0.7;';
+    responseMessage.parentNode.appendChild(typingIndicator);
+    
     const streamEventSource = new EventSource(serverURL + "/logs");
     
     streamEventSource.onmessage = (event) => {
-        // Check if this is a text token
         if (event.data.startsWith('[TEXT_TOKEN]')) {
             const tokenText = event.data.substring('[TEXT_TOKEN]'.length);
             responseText += tokenText;
             responseMessage.textContent = responseText;
         }
-        // Check if inference is done
         else if (event.data === '[TEXT_DONE]') {
+            isStreaming = false;
             streamEventSource.close();
+            typingIndicator.remove();
             if (!responseText) {
                 responseMessage.textContent = 'No response generated';
             }
@@ -89,21 +99,22 @@ chatForm.addEventListener('submit', async function(e) {
     
     streamEventSource.onerror = (error) => {
         console.error('Streaming error:', error);
+        isStreaming = false;
         streamEventSource.close();
+        typingIndicator.remove();
         if (!responseText) {
             responseMessage.textContent = 'Error: Could not stream response';
         }
     };
     
     try {
-        // Start the inference request
         const response = await fetch(`${serverURL}/infer`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'llama3.1-8b-instruct',
+                model: modelName,
                 prompt: userMessage
             })
         });
@@ -112,12 +123,13 @@ chatForm.addEventListener('submit', async function(e) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        // We don't need the response body anymore since tokens stream via SSE
         await response.json();
         
     } catch (error) {
         console.error('Error:', error);
+        isStreaming = false;
         streamEventSource.close();
+        typingIndicator.remove();
         responseMessage.textContent = 'Error: Could not connect to server';
     }
 });
@@ -152,7 +164,6 @@ document.querySelectorAll('.gallery img').forEach(img => {
             const response = await fetch(this.src);
             const blob = await response.blob();
             
-            // Convert image to base64
             const base64 = await new Promise((resolve) => {
                 const reader = new FileReader();
                 reader.onload = () => {

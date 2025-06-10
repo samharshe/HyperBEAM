@@ -150,6 +150,7 @@ h1 {
     word-wrap: break-word;
     line-height: 1.4;
     font-size: 14px;
+    min-height: 20px;
 }
 
 .user-message {
