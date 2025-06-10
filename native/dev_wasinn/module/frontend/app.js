@@ -64,9 +64,39 @@ chatForm.addEventListener('submit', async function(e) {
     addMessage(userMessage, true);
     userPromptInput.value = '';
     
-    const processingMessage = addMessage('Processing your request...', false);
+    // Create response message that will be updated in real-time
+    const responseMessage = addMessage('', false);
+    let responseText = '';
+    
+    // Create a new EventSource to listen for streaming tokens
+    const streamEventSource = new EventSource(serverURL + "/logs");
+    
+    streamEventSource.onmessage = (event) => {
+        // Check if this is a text token
+        if (event.data.startsWith('[TEXT_TOKEN]')) {
+            const tokenText = event.data.substring('[TEXT_TOKEN]'.length);
+            responseText += tokenText;
+            responseMessage.textContent = responseText;
+        }
+        // Check if inference is done
+        else if (event.data === '[TEXT_DONE]') {
+            streamEventSource.close();
+            if (!responseText) {
+                responseMessage.textContent = 'No response generated';
+            }
+        }
+    };
+    
+    streamEventSource.onerror = (error) => {
+        console.error('Streaming error:', error);
+        streamEventSource.close();
+        if (!responseText) {
+            responseMessage.textContent = 'Error: Could not stream response';
+        }
+    };
     
     try {
+        // Start the inference request
         const response = await fetch(`${serverURL}/infer`, {
             method: 'POST',
             headers: {
@@ -82,14 +112,13 @@ chatForm.addEventListener('submit', async function(e) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        const data = await response.json();
-        
-        processingMessage.remove();
-        addMessage(data.text || 'No response', false);
+        // We don't need the response body anymore since tokens stream via SSE
+        await response.json();
         
     } catch (error) {
         console.error('Error:', error);
-        processingMessage.textContent = 'Error: Could not connect to server';
+        streamEventSource.close();
+        responseMessage.textContent = 'Error: Could not connect to server';
     }
 });
 

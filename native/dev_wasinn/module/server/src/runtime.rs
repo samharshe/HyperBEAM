@@ -3,7 +3,6 @@ use std::{
     sync::Arc,
 };
 
-use tokio::sync::mpsc::UnboundedReceiver;
 use wasmtime::{
     component::{Component, Linker, ResourceTable},
     Engine, Store,
@@ -26,17 +25,19 @@ use super::{
     registry::Registry,
 };
 
-struct Context
+pub struct Context
 {
-    wasi: WasiCtx,
-    wasi_nn: WasiNnCtx,
-    ncl_ml: ncl_ml::NclMlContenx,
-    table: ResourceTable,
+    pub wasi: WasiCtx,
+    pub wasi_nn: WasiNnCtx,
+    pub ncl_ml: ncl_ml::NclMlContenx,
+    pub table: ResourceTable,
+    pub broadcast_sender: tokio::sync::broadcast::Sender<String>,
+    pub tokenizer: tokenizers::tokenizer::Tokenizer,
 }
 
 impl Context
 {
-    fn new(preopen_dir: &Path, preload_model: bool, mut backend: Backend, registry_id: &str) -> anyhow::Result<Self>
+    fn new(preopen_dir: &Path, preload_model: bool, mut backend: Backend, registry_id: &str, broadcast_sender: tokio::sync::broadcast::Sender<String>, tokenizer: tokenizers::tokenizer::Tokenizer) -> anyhow::Result<Self>
     {
         let mut builder = WasiCtxBuilder::new();
         builder.inherit_stdio().preopened_dir(preopen_dir, "", DirPerms::READ, FilePerms::READ)?;
@@ -52,6 +53,8 @@ impl Context
             wasi_nn,
             table: ResourceTable::new(),
             ncl_ml: ncl_ml::NclMlContenx::default(),
+            broadcast_sender,
+            tokenizer,
         })
     }
 }
@@ -79,13 +82,13 @@ pub struct WasmInstance
 
 impl WasmInstance
 {
-    pub fn new(engine: Arc<Engine>, component: Arc<Component>, registry_id: &str) -> anyhow::Result<WasmInstance>
+    pub fn new(engine: Arc<Engine>, component: Arc<Component>, registry_id: &str, broadcast_sender: tokio::sync::broadcast::Sender<String>, tokenizer: tokenizers::tokenizer::Tokenizer) -> anyhow::Result<WasmInstance>
     {
         let full_path: PathBuf = std::env::current_dir().unwrap().join("models").join("onnx").join(registry_id);
 
         let mut store = Store::new(
             &engine,
-            Context::new(&full_path, true, Backend::from(OnnxBackend::default()), registry_id).unwrap(),
+            Context::new(&full_path, true, Backend::from(OnnxBackend::default()), registry_id, broadcast_sender, tokenizer).unwrap(),
         );
 
         let mut linker = Linker::new(&engine);
@@ -93,7 +96,7 @@ impl WasmInstance
             WasiNnView::new(&mut c.table, &mut c.wasi_nn)
         })?;
         ncl_ml::add_to_linker(&mut linker, |c: &mut Context| {
-            ncl_ml::NclMlView::new(&mut c.table, &mut c.ncl_ml)
+            ncl_ml::NclMlView::new(c)
         })?;
         wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
         let ncl_ml_world = NclML::instantiate(&mut store, &component, &linker)?;
@@ -105,7 +108,7 @@ impl WasmInstance
         })
     }
 
-    pub fn register(&mut self) -> anyhow::Result<(u64, UnboundedReceiver<u32>)>
+    pub fn register(&mut self) -> anyhow::Result<u64>
     {
         use crate::ncl_ml::types::SessionConfig;
         
@@ -119,50 +122,49 @@ impl WasmInstance
         // Register session with WASM component
         let session_id = self.ncl_ml_world.ncl_ml_chatbot().call_register(&mut self.store, &config)?;
         
-        // Create session in the ncl_ml context to receive tokens
-        let rx = self.store.data_mut().ncl_ml.new_session(session_id);
-        
-        Ok((session_id, rx))
+        Ok(session_id)
     }
-    pub fn infer_llm(&mut self, session_id: u64, ids: Vec<i64>, token_receiver: &mut UnboundedReceiver<u32>) -> anyhow::Result<Vec<u32>>
+    pub fn infer_llm(&mut self, session_id: u64, ids: Vec<i64>, log_sender: Option<tokio::sync::broadcast::Sender<String>>) -> anyhow::Result<()>
     {
+        // Debug: Show we entered infer_llm
+        if let Some(ref sender) = log_sender {
+            sender.send("[DEBUG] Inside infer_llm, about to call WASM component".to_string()).ok();
+        }
+        
         // Call the WASM component's chatbot::infer method
         match self.ncl_ml_world.ncl_ml_chatbot().call_infer(&mut self.store, session_id, &ids) {
-            Ok(result) => match result {
-                Ok(_) => {
-                    // Collect all tokens generated during inference
-                    let mut tokens = Vec::new();
-                    
-                    // Drain the entire channel
-                    loop {
-                        match token_receiver.try_recv() {
-                            Ok(token) => tokens.push(token),
-                            Err(_) => break, // Channel empty
+            Ok(result) => {
+                if let Some(ref sender) = log_sender {
+                    sender.send("[DEBUG] WASM call_infer returned Ok, checking inner result".to_string()).ok();
+                }
+                match result {
+                    Ok(_) => {
+                        if let Some(ref sender) = log_sender {
+                            sender.send("[DEBUG] Inference completed successfully".to_string()).ok();
                         }
+                        Ok(())
+                    },
+                    Err(error) => {
+                        if let Some(ref sender) = log_sender {
+                            sender.send(format!("[DEBUG] Inner result is Err: {:?}", error)).ok();
+                        }
+                        eprintln!("WASM component inference error: {:?}", error);
+                        Err(anyhow::anyhow!("WASM inference error: {:?}", error))
                     }
-                    
-                    if tokens.is_empty() {
-                        eprintln!("No tokens received from WASM component");
-                    } else {
-                        eprintln!("Collected {} tokens from WASM component: {:?}", tokens.len(), tokens);
-                    }
-                    
-                    Ok(tokens)
-                },
-                Err(error) => {
-                    eprintln!("WASM component inference error: {:?}", error);
-                    Ok(vec![])
                 }
             },
             Err(error) => {
+                if let Some(ref sender) = log_sender {
+                    sender.send(format!("[DEBUG] WASM call_infer failed: {}", error)).ok();
+                }
                 eprintln!("WASM component call error: {}", error);
-                Ok(vec![])
+                Err(anyhow::anyhow!("WASM call error: {}", error))
             }
         }
     }
 
     /// Complete text inference from prompt to response text
-    pub fn infer_text(&mut self, user_prompt: &str, tokenizer: &tokenizers::tokenizer::Tokenizer) -> anyhow::Result<String>
+    pub fn infer_text(&mut self, user_prompt: &str, log_sender: Option<tokio::sync::broadcast::Sender<String>>) -> anyhow::Result<String>
     {
         // Format the prompt with system message template
         let prompt = format!(r#"<|begin_of_text|><|start_header_id|>system<|end_header_id|>
@@ -171,26 +173,23 @@ You are a helpful assistant<|eot_id|><|start_header_id|>user<|end_header_id|>
 "#, user_prompt);
         
         // Tokenize the prompt
-        let encoding = tokenizer.encode(prompt.clone(), false).unwrap();
+        let encoding = self.store.data().tokenizer.encode(prompt.clone(), false).unwrap();
         let ids: Vec<i64> = encoding.get_ids().iter().map(|&id| id as i64).collect();
         
         eprintln!("DEBUG runtime: Formatted prompt: {}", prompt);
         eprintln!("DEBUG runtime: Tokenized to {} tokens", ids.len());
         
         // Register a session if we don't have one, or reuse existing
-        let (session_id, mut session_receiver) = self.register()?;
+        let session_id = self.register()?;
         
         // Run inference
-        let generated_tokens = self.infer_llm(session_id, ids, &mut session_receiver)?;
-        
-        if generated_tokens.is_empty() {
-            return Ok("".to_string());
+        if let Some(ref sender) = log_sender {
+            sender.send("[DEBUG] About to call infer_llm with streaming".to_string()).ok();
         }
+        self.infer_llm(session_id, ids, log_sender)?;
         
-        // Decode tokens back to text
-        let response = tokenizer.decode(&generated_tokens, false).unwrap();
-        
-        eprintln!("DEBUG runtime: Generated response: {}", response);
-        Ok(response)
+        // Since tokens are now streaming directly to broadcast channel,
+        // we don't collect them here. Return a placeholder response.
+        Ok("Inference completed - tokens streamed via SSE".to_string())
     }
 }

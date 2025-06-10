@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use wasmtime::component::ResourceTable;
 mod generated_
 {
@@ -17,43 +15,29 @@ pub mod types
 
 pub struct NclMlView<'a>
 {
-    ctx: &'a mut NclMlContenx,
-    table: &'a mut ResourceTable,
+    context: &'a mut crate::runtime::Context,
 }
 
 impl<'a> NclMlView<'a>
 {
-    pub fn new(table: &'a mut ResourceTable, ctx: &'a mut NclMlContenx) -> Self
+    pub fn new(context: &'a mut crate::runtime::Context) -> Self
     {
         Self {
-            ctx,
-            table,
+            context,
         }
     }
 }
 
 pub struct NclMlContenx
 {
-    sessions: HashMap<u64, UnboundedSender<u32>>,
+    // Empty placeholder struct
 }
 
 impl Default for NclMlContenx
 {
     fn default() -> Self
     {
-        Self {
-            sessions: HashMap::new(),
-        }
-    }
-}
-
-impl NclMlContenx
-{
-    pub fn new_session(&mut self, session_id: u64) -> UnboundedReceiver<u32>
-    {
-        let (sender, receiver) = unbounded_channel::<u32>();
-        self.sessions.insert(session_id, sender);
-        receiver
+        Self {}
     }
 }
 impl types::token_generator::Host for NclMlView<'_>
@@ -61,15 +45,13 @@ impl types::token_generator::Host for NclMlView<'_>
     fn generate(&mut self, session_id: types::token_generator::SessionId, token: types::token_generator::TokenId)
         -> u32
     {
-        match self.ctx.sessions.get(&session_id) {
-            None => 0,
-            Some(session) => {
-                // Send the token through the channel
-                match session.send(token) {
-                    Ok(_) => 1,  // Success
-                    Err(_) => 0, // Channel closed
-                }
-            },
+        // Decode token to text and stream immediately
+        let token_text = self.context.tokenizer.decode(&[token], false).unwrap_or_else(|_| format!("[token_{}]", token));
+        
+        // Stream token directly to broadcast channel
+        match self.context.broadcast_sender.send(format!("[TEXT_TOKEN]{}", token_text)) {
+            Ok(_) => 1,  // Success
+            Err(_) => 0, // Channel closed or no receivers
         }
     }
 }

@@ -241,7 +241,11 @@ pub async fn start_server(port: u16, wasm_module_path: String) -> anyhow::Result
                     UnifiedRequest::Image(image_req) => {
                         // Handle image inference (currently incomplete)
                         log_tx_clone.send("Processing image inference...".to_string()).ok();
-                        let instance = WasmInstance::new(engine, module, &image_req.model)?;
+                        // For image inference, we need a placeholder tokenizer
+                        let placeholder_tokenizer = tokenizers::tokenizer::Tokenizer::from_bytes(b"{}").unwrap_or_else(|_| 
+                            tokenizers::tokenizer::Tokenizer::new(tokenizers::models::wordpiece::WordPiece::default())
+                        );
+                        let instance = WasmInstance::new(engine, module, &image_req.model, log_tx_clone.clone(), placeholder_tokenizer)?;
                         // TODO: Implement image inference
                         // let result = instance.infer(image_req.tensor_bytes)?;
                         let response_data = ApiResponseData::Image { 
@@ -256,9 +260,13 @@ pub async fn start_server(port: u16, wasm_module_path: String) -> anyhow::Result
                         log_tx_clone.send(format!("Processing text inference for: {}", text_req.prompt)).ok();
                         
                         if let Some(ref tokenizer) = tokenizer {
-                            let mut instance = WasmInstance::new(engine, module, &text_req.model)?;
-                            match instance.infer_text(&text_req.prompt, tokenizer) {
+                            log_tx_clone.send("[TEST_MESSAGE] This should appear in frontend logs immediately".to_string()).ok();
+                            log_tx_clone.send("[DEBUG] About to start text inference with streaming".to_string()).ok();
+                            let mut instance = WasmInstance::new(engine, module, &text_req.model, log_tx_clone.clone(), tokenizer.clone())?;
+                            match instance.infer_text(&text_req.prompt, Some(log_tx_clone.clone())) {
                                 Ok(response_text) => {
+                                    log_tx_clone.send("[TEXT_DONE]".to_string()).ok();
+                                    log_tx_clone.send("[TEST_MESSAGE] Text inference just completed successfully".to_string()).ok();
                                     log_tx_clone.send(format!("Text inference completed: {}", response_text)).ok();
                                     let response_data = ApiResponseData::Text { text: response_text };
                                     let _ = text_req.responder.send(response_data);
