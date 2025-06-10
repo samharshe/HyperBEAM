@@ -140,7 +140,7 @@ document.querySelectorAll('.gallery img').forEach(img => {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    model: 'mobilenet-v3-large',
+                    model: 'squeezenet1.1-7',
                     image: base64
                 })
             });
