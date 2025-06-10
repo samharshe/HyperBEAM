@@ -15,9 +15,66 @@ pub fn full<T: Into<Bytes>>(chunk: T) -> BoxBody
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct InferenceResult(pub u32, pub f32);
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct TextResult
+{
+    pub text: String,
+}
+
 #[derive(Debug)]
 pub struct InferenceRequest
 {
+    pub model: String,
     pub tensor_bytes: Vec<u8>,
-    pub responder: oneshot::Sender<InferenceResult>,
+    pub responder: oneshot::Sender<ApiResponse>,
+}
+
+#[derive(Debug)]
+pub struct TextRequest
+{
+    pub model: String,
+    pub prompt: String,
+    pub responder: oneshot::Sender<ApiResponse>,
+}
+
+#[derive(Debug)]
+pub enum UnifiedRequest
+{
+    Image(InferenceRequest),
+    Text(TextRequest),
+}
+
+// JSON API Request/Response structures
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ApiRequest {
+    pub model: String,
+    #[serde(flatten)]
+    pub data: ApiRequestData,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ApiRequestData {
+    Text { prompt: String },
+    Image { image: String }, // Base64 encoded image
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ApiResponse {
+    pub model: String,
+    #[serde(flatten)]
+    pub result: ApiResponseData,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ApiResponseData {
+    Text { text: String },
+    Image { label: u32, probability: f32 },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ApiError {
+    pub error: String,
+    pub message: String,
 }

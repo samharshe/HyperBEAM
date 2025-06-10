@@ -70,9 +70,12 @@ chatForm.addEventListener('submit', async function(e) {
         const response = await fetch(`${serverURL}/infer`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'text/plain',
+                'Content-Type': 'application/json',
             },
-            body: userMessage
+            body: JSON.stringify({
+                model: 'llama3.1-8b-instruct',
+                prompt: userMessage
+            })
         });
         
         if (!response.ok) {
@@ -82,7 +85,7 @@ chatForm.addEventListener('submit', async function(e) {
         const data = await response.json();
         
         processingMessage.remove();
-        addMessage(data.output || data.response || 'No response', false);
+        addMessage(data.text || 'No response', false);
         
     } catch (error) {
         console.error('Error:', error);
@@ -120,12 +123,26 @@ document.querySelectorAll('.gallery img').forEach(img => {
             const response = await fetch(this.src);
             const blob = await response.blob();
             
+            // Convert image to base64
+            const base64 = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    // Remove the "data:image/jpeg;base64," prefix
+                    const base64 = reader.result.split(',')[1];
+                    resolve(base64);
+                };
+                reader.readAsDataURL(blob);
+            });
+            
             const serverResponse = await fetch(serverURL + "/infer", {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'image/jpeg'
+                    'Content-Type': 'application/json'
                 },
-                body: blob,
+                body: JSON.stringify({
+                    model: 'mobilenet-v3-large',
+                    image: base64
+                })
             });
             
             if (!serverResponse.ok) {
@@ -134,10 +151,10 @@ document.querySelectorAll('.gallery img').forEach(img => {
             }
 
             const result = await serverResponse.json();
-            const label = result?.output ?? 'unknown';
-            const confidence = result?.metadata?.probability ?? 0;
+            const label = result?.label ?? 'unknown';
+            const confidence = result?.probability ?? 0;
 
-            outputElement.innerHTML = `mobilenet_v3_large identified a ${label} with ${(confidence*100).toFixed(2)}% confidence.`;
+            outputElement.innerHTML = `${result.model} identified a ${label} with ${(confidence*100).toFixed(2)}% confidence.`;
             
         } catch (error) {
             console.error(error);

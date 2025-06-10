@@ -63,7 +63,13 @@ impl types::token_generator::Host for NclMlView<'_>
     {
         match self.ctx.sessions.get(&session_id) {
             None => 0,
-            Some(session) => 1,
+            Some(session) => {
+                // Send the token through the channel
+                match session.send(token) {
+                    Ok(_) => 1,  // Success
+                    Err(_) => 0, // Channel closed
+                }
+            },
         }
     }
 }

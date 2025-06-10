@@ -108,8 +108,12 @@ impl chatbot::Guest for Chatbot
                 let (next_token, _) = next_logit.iter().enumerate().max_by(|a, b| a.1.total_cmp(b.1)).unwrap();
 
                 // check for end-of-sequence token
+                println!("Generated token: {} (id: {})", next_token, next_token);
                 match next_token {
-                    128000..=128255 => break,
+                    128000..=128255 => {
+                        println!("Stopping: Found EOS token {}", next_token);
+                        break;
+                    },
                     _ => match token_generator::generate(session.id, next_token as u32) {
                         1 => {
                             // extend input slices to include next_token
@@ -121,7 +125,10 @@ impl chatbot::Guest for Chatbot
                             tokens_dims[1] = length;
                             count += 1;
                         },
-                        _ => break,
+                        _ => {
+                            println!("Stopping: Host requested abort");
+                            break;
+                        },
                     },
                 }
             }

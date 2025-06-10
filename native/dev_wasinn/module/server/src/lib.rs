@@ -6,6 +6,8 @@ pub mod utils;
 
 use std::{net::SocketAddr, path::Path, sync::Arc};
 
+use base64;
+
 use bytes::Buf;
 use futures::stream::StreamExt;
 use http_body_util::{BodyExt, StreamBody};
@@ -28,7 +30,7 @@ use tokio::{
     task::spawn_blocking,
 };
 use tokio_stream::wrappers::BroadcastStream;
-use utils::{full, BoxBody, InferenceRequest, Result};
+use utils::{full, BoxBody, InferenceRequest, TextRequest, UnifiedRequest, Result, ApiRequest, ApiRequestData, ApiResponse, ApiResponseData, ApiError};
 use wasmtime::{component::Component, Config, Engine};
 
 static NOT_FOUND: &[u8] = b"Not Found\n";
@@ -38,70 +40,102 @@ static INTERNAL_SERVER_ERROR: &[u8] = b"Internal Server Error\n";
 
 async fn infer(
     request: Request<Body>,
-    inference_thread_sender: UnboundedSender<InferenceRequest>,
+    inference_thread_sender: UnboundedSender<UnifiedRequest>,
     log_sender: tokio::sync::broadcast::Sender<String>,
 ) -> Result<Response<BoxBody>>
 {
     log_sender.send("[server/main.rs] Received inference request.".to_string()).ok();
 
-    if let Some(content_type) = request.headers().get(header::CONTENT_TYPE) {
-        if content_type != "image/jpeg" {
-            log_sender.send("[server/main.rs] Inference request has unsupported media type.".to_string()).ok();
+    // Parse JSON body
+    let mut body = request.collect().await?.aggregate();
+    let body_bytes = body.copy_to_bytes(body.remaining());
+    
+    let api_request: ApiRequest = match serde_json::from_slice(&body_bytes) {
+        Ok(req) => req,
+        Err(e) => {
+            log_sender.send(format!("[server/main.rs] Invalid JSON request: {}", e)).ok();
+            let error = ApiError {
+                error: "invalid_request".to_string(),
+                message: format!("Invalid JSON: {}", e),
+            };
             return Ok(Response::builder()
-                .status(StatusCode::UNSUPPORTED_MEDIA_TYPE)
-                .body(full(JPEG_EXPECTED))
+                .status(StatusCode::BAD_REQUEST)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(full(serde_json::to_string(&error).unwrap()))
                 .unwrap());
         }
-        let mut body = request.collect().await?.aggregate();
-        let bytes = body.copy_to_bytes(body.remaining());
+    };
 
-        log_sender.send("[server/main.rs] Processing image for inference.".to_string()).ok();
-        let tensor = tensor::jpeg_to_squeezenet_tensor(bytes.to_vec());
-        let (sender, receiver) = oneshot::channel();
-        inference_thread_sender.send(InferenceRequest {
-            tensor_bytes: tensor,
-            responder: sender,
-        })?;
+    log_sender.send(format!("[server/main.rs] Processing request for model: {}", api_request.model)).ok();
 
-        log_sender.send("[server/main.rs] Passed tensor to inferencer. Waiting for inference result.".to_string()).ok();
-        log_sender
-            .send("[server/main.rs] (No logs during inference because this is performed by WASM module.)".to_string())
-            .ok();
-        return match receiver.await {
-            Ok(response) => {
-                let r = match serde_json::to_string(&response) {
-                    Ok(json) => {
-                        log_sender
-                            .send(format!(
-                                "[server/main.rs] Inference result: [label={}, probability={:.5}].",
-                                response.0, response.1
-                            ))
-                            .ok();
-                        log_sender.send("[server/main.rs] Inference successful. Sending response.".to_string()).ok();
-                        Response::builder().header(header::CONTENT_TYPE, "application/json").body(full(json)).unwrap()
-                    },
-                    Err(_) => {
-                        log_sender.send("[server/main.rs] Error serializing inference response.".to_string()).ok();
-                        Response::builder()
-                            .status(StatusCode::INTERNAL_SERVER_ERROR)
-                            .body(full(INTERNAL_SERVER_ERROR))
-                            .unwrap()
-                    },
-                };
-                Ok(r)
-            },
-            Err(_) => {
-                log_sender.send("[server/main.rs] Inference task failed or channel closed.".to_string()).ok();
-                Ok(Response::builder()
-                    .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(full(INTERNAL_SERVER_ERROR))
-                    .unwrap())
-            },
-        };
+    // Convert API request to internal request and send to inference thread
+    let (sender, receiver) = oneshot::channel();
+    let internal_request = match api_request.data {
+        ApiRequestData::Text { prompt } => {
+            log_sender.send(format!("[server/main.rs] Processing text inference: {}", prompt)).ok();
+            UnifiedRequest::Text(TextRequest {
+                model: api_request.model.clone(),
+                prompt,
+                responder: sender,
+            })
+        },
+        ApiRequestData::Image { image } => {
+            log_sender.send("[server/main.rs] Processing image inference.".to_string()).ok();
+            
+            // Decode base64 image
+            let image_bytes = match base64::decode(&image) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    log_sender.send(format!("[server/main.rs] Invalid base64 image: {}", e)).ok();
+                    let error = ApiError {
+                        error: "invalid_image".to_string(),
+                        message: format!("Invalid base64 encoding: {}", e),
+                    };
+                    return Ok(Response::builder()
+                        .status(StatusCode::BAD_REQUEST)
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(full(serde_json::to_string(&error).unwrap()))
+                        .unwrap());
+                }
+            };
+
+            let tensor = tensor::jpeg_to_squeezenet_tensor(image_bytes);
+            UnifiedRequest::Image(InferenceRequest {
+                model: api_request.model.clone(),
+                tensor_bytes: tensor,
+                responder: sender,
+            })
+        }
+    };
+
+    // Send request to inference thread
+    inference_thread_sender.send(internal_request)?;
+    log_sender.send("[server/main.rs] Passed request to inferencer. Waiting for result.".to_string()).ok();
+
+    // Wait for response
+    match receiver.await {
+        Ok(api_response) => {
+            let json = serde_json::to_string(&api_response).unwrap();
+            log_sender.send("[server/main.rs] Inference successful.".to_string()).ok();
+            
+            Ok(Response::builder()
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(full(json))
+                .unwrap())
+        },
+        Err(_) => {
+            log_sender.send("[server/main.rs] Inference task failed or channel closed.".to_string()).ok();
+            let error = ApiError {
+                error: "inference_failed".to_string(),
+                message: "Inference failed".to_string(),
+            };
+            Ok(Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(full(serde_json::to_string(&error).unwrap()))
+                .unwrap())
+        },
     }
-
-    log_sender.send("[server/main.rs] Inference request missing Content-Type header.".to_string()).ok();
-    Ok(Response::builder().status(StatusCode::BAD_REQUEST).body(full(MISSING_CONTENT_TYPE)).unwrap())
 }
 
 async fn logs(log_sender: tokio::sync::broadcast::Sender<String>) -> Result<Response<BoxBody>>
@@ -135,7 +169,7 @@ async fn logs(log_sender: tokio::sync::broadcast::Sender<String>) -> Result<Resp
 
 async fn serve(
     request: Request<Body>,
-    inference_thread_sender: UnboundedSender<InferenceRequest>,
+    inference_thread_sender: UnboundedSender<UnifiedRequest>,
     log_sender: tokio::sync::broadcast::Sender<String>,
 ) -> Result<Response<BoxBody>>
 {
@@ -177,21 +211,84 @@ pub async fn start_server(port: u16, wasm_module_path: String) -> anyhow::Result
 {
     let addr: SocketAddr = ([0, 0, 0, 0], port).into();
     let listener = TcpListener::bind(addr).await?;
-    let (tx, mut rx) = unbounded_channel::<InferenceRequest>();
+    println!("✅ HTTP server listening on http://127.0.0.1:{}", port);
+    let (tx, mut rx) = unbounded_channel::<UnifiedRequest>();
     let (log_tx, _log_rx) = tokio::sync::broadcast::channel::<String>(16);
     let log_tx_inference = log_tx.clone();
     tokio::spawn(async move {
         log_tx_inference.send("Inference thread is active and working.".to_string()).ok();
         let engine = Arc::new(Engine::new(&Config::new()).unwrap());
         let module = Arc::new(Component::from_file(&engine, Path::new(&wasm_module_path)).unwrap());
+        
+        // Load tokenizer for text inference
+        let tokenizer_path = "./models/onnx/llama3.1-8b-instruct/tokenizer.json";
+        let tokenizer = match tokenizers::tokenizer::Tokenizer::from_file(tokenizer_path) {
+            Ok(t) => Some(t),
+            Err(e) => {
+                log_tx_inference.send(format!("Failed to load tokenizer: {}", e)).ok();
+                None
+            }
+        };
+        
         while let Some(request) = rx.recv().await {
             let engine = Arc::clone(&engine);
             let module = Arc::clone(&module);
+            let tokenizer = tokenizer.clone();
+            let log_tx_clone = log_tx_inference.clone();
+            
             spawn_blocking(move || -> anyhow::Result<()> {
-                let instance = WasmInstance::new(engine, module, "llama3.2-1b-kvc-fp16")?;
-                // let result = instance.infer(request.tensor_bytes)?;
-                // let _ = request.responder.send(result);
-                Ok(())
+                match request {
+                    UnifiedRequest::Image(image_req) => {
+                        // Handle image inference (currently incomplete)
+                        log_tx_clone.send("Processing image inference...".to_string()).ok();
+                        let instance = WasmInstance::new(engine, module, &image_req.model)?;
+                        // TODO: Implement image inference
+                        // let result = instance.infer(image_req.tensor_bytes)?;
+                        let api_response = ApiResponse {
+                            model: image_req.model,
+                            result: ApiResponseData::Image { 
+                                label: 0, // TODO: Actual inference
+                                probability: 0.0 
+                            },
+                        };
+                        let _ = image_req.responder.send(api_response);
+                        Ok(())
+                    },
+                    UnifiedRequest::Text(text_req) => {
+                        // Handle text inference
+                        log_tx_clone.send(format!("Processing text inference for: {}", text_req.prompt)).ok();
+                        
+                        if let Some(ref tokenizer) = tokenizer {
+                            let mut instance = WasmInstance::new(engine, module, &text_req.model)?;
+                            match instance.infer_text(&text_req.prompt, tokenizer) {
+                                Ok(response_text) => {
+                                    log_tx_clone.send(format!("Text inference completed: {}", response_text)).ok();
+                                    let api_response = ApiResponse {
+                                        model: text_req.model,
+                                        result: ApiResponseData::Text { text: response_text },
+                                    };
+                                    let _ = text_req.responder.send(api_response);
+                                },
+                                Err(e) => {
+                                    log_tx_clone.send(format!("Text inference failed: {}", e)).ok();
+                                    let api_response = ApiResponse {
+                                        model: text_req.model,
+                                        result: ApiResponseData::Text { text: format!("Error: {}", e) },
+                                    };
+                                    let _ = text_req.responder.send(api_response);
+                                }
+                            }
+                        } else {
+                            log_tx_clone.send("Tokenizer not available for text inference".to_string()).ok();
+                            let api_response = ApiResponse {
+                                model: text_req.model,
+                                result: ApiResponseData::Text { text: "Error: Tokenizer not available".to_string() },
+                            };
+                            let _ = text_req.responder.send(api_response);
+                        }
+                        Ok(())
+                    }
+                }
             });
         }
     });

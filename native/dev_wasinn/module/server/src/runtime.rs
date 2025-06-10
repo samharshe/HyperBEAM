@@ -21,7 +21,7 @@ use wasmtime_wasi_nn::{
 use super::{
     ncl_ml::{
         self,
-        types::{NclML, SessionConfig},
+        types::NclML,
     },
     registry::Registry,
 };
@@ -107,38 +107,90 @@ impl WasmInstance
 
     pub fn register(&mut self) -> anyhow::Result<(u64, UnboundedReceiver<u32>)>
     {
-        let interface_idx = self
-            .instance
-            .get_export_index(&mut self.store, None, "component:inferer/mobilenet@0.1.0")
-            .expect("Cannot get `component:inferer/mobilenet@0.1.0` interface");
-
-        let parent_export_idx = Some(&interface_idx);
-        let func_idx = self
-            .instance
-            .get_export_index(&mut self.store, parent_export_idx, "infer")
-            .expect("Cannot find `infer` function in `component:inferer/mobilenet@0.1.0` interface");
-        let func = self.instance.get_func(&mut self.store, func_idx).expect("func_idx is unexpectedly missing");
-        let infer = func.typed::<(String, Vec<u8>), ((u32, f32),)>(&self.store)?;
-        let ((label, confidence),) = infer.call(&mut self.store, (self.registry_id.clone(), tensor_bytes))?;
-        infer.post_return(&mut self.store)?;
-        Ok(InferenceResult(label, confidence))
+        use crate::ncl_ml::types::SessionConfig;
+        
+        // Create session config for the model
+        let config = SessionConfig {
+            model_id: self.registry_id.clone(),
+            history: None,
+            max_token: Some(50),
+        };
+        
+        // Register session with WASM component
+        let session_id = self.ncl_ml_world.ncl_ml_chatbot().call_register(&mut self.store, &config)?;
+        
+        // Create session in the ncl_ml context to receive tokens
+        let rx = self.store.data_mut().ncl_ml.new_session(session_id);
+        
+        Ok((session_id, rx))
     }
-    pub fn infer_llm(&mut self, session_id: u64, ids: Vec<i64>) -> anyhow::Result<Vec<u32>>
+    pub fn infer_llm(&mut self, session_id: u64, ids: Vec<i64>, token_receiver: &mut UnboundedReceiver<u32>) -> anyhow::Result<Vec<u32>>
     {
-        let interface_idx = self
-            .instance
-            .get_export_index(&mut self.store, None, "component:inferer/mobilenet@0.1.0")
-            .expect("Cannot get `component:inferer/mobilenet@0.1.0` interface");
+        // Call the WASM component's chatbot::infer method
+        match self.ncl_ml_world.ncl_ml_chatbot().call_infer(&mut self.store, session_id, &ids) {
+            Ok(result) => match result {
+                Ok(_) => {
+                    // Collect all tokens generated during inference
+                    let mut tokens = Vec::new();
+                    
+                    // Drain the entire channel
+                    loop {
+                        match token_receiver.try_recv() {
+                            Ok(token) => tokens.push(token),
+                            Err(_) => break, // Channel empty
+                        }
+                    }
+                    
+                    if tokens.is_empty() {
+                        eprintln!("No tokens received from WASM component");
+                    } else {
+                        eprintln!("Collected {} tokens from WASM component: {:?}", tokens.len(), tokens);
+                    }
+                    
+                    Ok(tokens)
+                },
+                Err(error) => {
+                    eprintln!("WASM component inference error: {:?}", error);
+                    Ok(vec![])
+                }
+            },
+            Err(error) => {
+                eprintln!("WASM component call error: {}", error);
+                Ok(vec![])
+            }
+        }
+    }
 
-        let parent_export_idx = Some(&interface_idx);
-        let func_idx = self
-            .instance
-            .get_export_index(&mut self.store, parent_export_idx, "infer-llm")
-            .expect("Cannot find `infer` function in `component:inferer/mobilenet@0.1.0` interface");
-        let func = self.instance.get_func(&mut self.store, func_idx).expect("func_idx is unexpectedly missing");
-        let infer = func.typed::<(String, Vec<i64>), (Vec<u32>,)>(&self.store)?;
-        let (result,) = infer.call(&mut self.store, (self.registry_id.clone(), ids))?;
-        infer.post_return(&mut self.store)?;
-        Ok(result)
+    /// Complete text inference from prompt to response text
+    pub fn infer_text(&mut self, user_prompt: &str, tokenizer: &tokenizers::tokenizer::Tokenizer) -> anyhow::Result<String>
+    {
+        // Format the prompt with system message template
+        let prompt = format!(r#"<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+You are a helpful assistant<|eot_id|><|start_header_id|>user<|end_header_id|>
+{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+"#, user_prompt);
+        
+        // Tokenize the prompt
+        let encoding = tokenizer.encode(prompt.clone(), false).unwrap();
+        let ids: Vec<i64> = encoding.get_ids().iter().map(|&id| id as i64).collect();
+        
+        eprintln!("DEBUG runtime: Formatted prompt: {}", prompt);
+        eprintln!("DEBUG runtime: Tokenized to {} tokens", ids.len());
+        
+        // Register a session if we don't have one, or reuse existing
+        let (session_id, mut session_receiver) = self.register()?;
+        
+        // Run inference
+        let generated_tokens = self.infer_llm(session_id, ids, &mut session_receiver)?;
+        
+        if generated_tokens.is_empty() {
+            return Ok("".to_string());
+        }
+        
+        // Decode tokens back to text
+        let response = tokenizer.decode(&generated_tokens, false).unwrap();
+        
+        eprintln!("DEBUG runtime: Generated response: {}", response);
+        Ok(response)
     }
 }

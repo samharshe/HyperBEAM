@@ -12,6 +12,10 @@ path = "src/lib.rs"
 name = "server"
 path = "src/main.rs"
 
+[[bin]]
+name = "http_server"
+path = "src/http_main.rs"
+
 [dependencies]
 tokio = { version = "1.45.0", features = ["io-util", "macros", "rt", "rt-multi-thread", "sync", "time", "full"] }
 hyper = { version = "1.6", features = ["full"] }
@@ -33,3 +37,4 @@ opencv = "0.94.4"
 tokenizers = "0.21.1"
 ndarray = "0.16.1"
 bytemuck = "1.23.0"
+base64 = "0.22"

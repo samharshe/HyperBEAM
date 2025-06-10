@@ -25,7 +25,7 @@ fn main() -> Result<()>
     let stdin = io::stdin();
     let mut stdout = io::stdout();
     let mut instance = WasmInstance::new(engine.clone(), module.clone(), "llama3.1-8b-instruct")?;
-    let (session_id, session_receiver) = instance.register().unwrap();
+    let (session_id, mut session_receiver) = instance.register().unwrap();
     println!("🦙 Chatbot ready. Type a message or 'exit':");
     for line in stdin.lock().lines() {
         let input = line?;
@@ -49,27 +49,14 @@ What is the capital of France?<|eot_id|><|start_header_id|>assistant<|end_header
         let eot_id = 128009;
         let mut generated_tokens = Vec::new();
         
-        let mut instance = WasmInstance::new(engine.clone(), module.clone(), "llama3.1-8b-instruct")?;
         
-        for i in 0..max_tokens {
-            let result = instance.infer_llm(ids.clone())?;
-            if result.is_empty() {
-                eprintln!("ERROR: No token generated");
-                break;
-            }
-            
-            let next_token = result[0];
-            eprintln!("DEBUG main: Generated token {} at position {}", next_token, i);
-            
-            // check for end-of-sequence token
-            if next_token == end_of_text as u32 || next_token == eot_id as u32 {
-                eprintln!("DEBUG main: end-of-sequence token generated; stopping.");
-                break;
-            }
-            
-            // add the generated token to our sequence
-            ids.push(next_token as i64);
-            generated_tokens.push(next_token);
+        // WASM component now generates the full response in one call
+        let result = instance.infer_llm(session_id, ids.clone(), &mut session_receiver)?;
+        if result.is_empty() {
+            eprintln!("ERROR: No tokens generated");
+        } else {
+            eprintln!("DEBUG main: Generated {} tokens: {:?}", result.len(), result);
+            generated_tokens.extend(result);
         }
         
         eprintln!("DEBUG main: Total generated tokens: {}", generated_tokens.len());
