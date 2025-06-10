@@ -134,13 +134,14 @@ document.querySelectorAll('.gallery img').forEach(img => {
                 reader.readAsDataURL(blob);
             });
             
+            const modelName = 'squeezenet1.1-7';
             const serverResponse = await fetch(serverURL + "/infer", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    model: 'squeezenet1.1-7',
+                    model: modelName,
                     image: base64
                 })
             });
@@ -154,7 +155,7 @@ document.querySelectorAll('.gallery img').forEach(img => {
             const label = result?.label ?? 'unknown';
             const confidence = result?.probability ?? 0;
 
-            outputElement.innerHTML = `${result.model} identified a ${label} with ${(confidence*100).toFixed(2)}% confidence.`;
+            outputElement.innerHTML = `${modelName} identified a ${label} with ${(confidence*100).toFixed(2)}% confidence.`;
             
         } catch (error) {
             console.error(error);

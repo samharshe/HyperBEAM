@@ -30,7 +30,7 @@ use tokio::{
     task::spawn_blocking,
 };
 use tokio_stream::wrappers::BroadcastStream;
-use utils::{full, BoxBody, InferenceRequest, TextRequest, UnifiedRequest, Result, ApiRequest, ApiRequestData, ApiResponse, ApiResponseData, ApiError};
+use utils::{full, BoxBody, InferenceRequest, TextRequest, UnifiedRequest, Result, ApiRequest, ApiRequestData, ApiResponseData, ApiError};
 use wasmtime::{component::Component, Config, Engine};
 
 static NOT_FOUND: &[u8] = b"Not Found\n";
@@ -244,14 +244,11 @@ pub async fn start_server(port: u16, wasm_module_path: String) -> anyhow::Result
                         let instance = WasmInstance::new(engine, module, &image_req.model)?;
                         // TODO: Implement image inference
                         // let result = instance.infer(image_req.tensor_bytes)?;
-                        let api_response = ApiResponse {
-                            model: image_req.model,
-                            result: ApiResponseData::Image { 
-                                label: 0, // TODO: Actual inference
-                                probability: 0.0 
-                            },
+                        let response_data = ApiResponseData::Image { 
+                            label: 0, // TODO: Actual inference
+                            probability: 0.0 
                         };
-                        let _ = image_req.responder.send(api_response);
+                        let _ = image_req.responder.send(response_data);
                         Ok(())
                     },
                     UnifiedRequest::Text(text_req) => {
@@ -263,28 +260,19 @@ pub async fn start_server(port: u16, wasm_module_path: String) -> anyhow::Result
                             match instance.infer_text(&text_req.prompt, tokenizer) {
                                 Ok(response_text) => {
                                     log_tx_clone.send(format!("Text inference completed: {}", response_text)).ok();
-                                    let api_response = ApiResponse {
-                                        model: text_req.model,
-                                        result: ApiResponseData::Text { text: response_text },
-                                    };
-                                    let _ = text_req.responder.send(api_response);
+                                    let response_data = ApiResponseData::Text { text: response_text };
+                                    let _ = text_req.responder.send(response_data);
                                 },
                                 Err(e) => {
                                     log_tx_clone.send(format!("Text inference failed: {}", e)).ok();
-                                    let api_response = ApiResponse {
-                                        model: text_req.model,
-                                        result: ApiResponseData::Text { text: format!("Error: {}", e) },
-                                    };
-                                    let _ = text_req.responder.send(api_response);
+                                    let response_data = ApiResponseData::Text { text: format!("Error: {}", e) };
+                                    let _ = text_req.responder.send(response_data);
                                 }
                             }
                         } else {
                             log_tx_clone.send("Tokenizer not available for text inference".to_string()).ok();
-                            let api_response = ApiResponse {
-                                model: text_req.model,
-                                result: ApiResponseData::Text { text: "Error: Tokenizer not available".to_string() },
-                            };
-                            let _ = text_req.responder.send(api_response);
+                            let response_data = ApiResponseData::Text { text: "Error: Tokenizer not available".to_string() };
+                            let _ = text_req.responder.send(response_data);
                         }
                         Ok(())
                     }

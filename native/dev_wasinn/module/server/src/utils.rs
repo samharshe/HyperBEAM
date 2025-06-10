@@ -26,7 +26,7 @@ pub struct InferenceRequest
 {
     pub model: String,
     pub tensor_bytes: Vec<u8>,
-    pub responder: oneshot::Sender<ApiResponse>,
+    pub responder: oneshot::Sender<ApiResponseData>,
 }
 
 #[derive(Debug)]
@@ -34,7 +34,7 @@ pub struct TextRequest
 {
     pub model: String,
     pub prompt: String,
-    pub responder: oneshot::Sender<ApiResponse>,
+    pub responder: oneshot::Sender<ApiResponseData>,
 }
 
 #[derive(Debug)]
@@ -57,13 +57,6 @@ pub struct ApiRequest {
 pub enum ApiRequestData {
     Text { prompt: String },
     Image { image: String }, // Base64 encoded image
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ApiResponse {
-    pub model: String,
-    #[serde(flatten)]
-    pub result: ApiResponseData,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
