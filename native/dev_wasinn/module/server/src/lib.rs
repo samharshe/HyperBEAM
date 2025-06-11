@@ -1,12 +1,13 @@
 mod ncl_ml;
 pub mod registry;
 pub mod runtime;
+pub mod image_runtime;
 pub mod tensor;
 pub mod utils;
 
 use std::{net::SocketAddr, path::Path, sync::Arc};
 
-use base64;
+use base64::Engine;
 
 use bytes::Buf;
 use futures::stream::StreamExt;
@@ -31,7 +32,7 @@ use tokio::{
 };
 use tokio_stream::wrappers::BroadcastStream;
 use utils::{full, BoxBody, InferenceRequest, TextRequest, UnifiedRequest, Result, ApiRequest, ApiRequestData, ApiResponseData, ApiError};
-use wasmtime::{component::Component, Config, Engine};
+use wasmtime::{component::Component, Config, Engine as WasmEngine, Module};
 
 static NOT_FOUND: &[u8] = b"Not Found\n";
 static MISSING_CONTENT_TYPE: &[u8] = b"Missing Content-Type.\n";
@@ -84,7 +85,7 @@ async fn infer(
             log_sender.send("[server/lib.rs] Processing image inference.".to_string()).ok();
             
             // Decode base64 image
-            let image_bytes = match base64::decode(&image) {
+            let image_bytes = match base64::prelude::BASE64_STANDARD.decode(&image) {
                 Ok(bytes) => bytes,
                 Err(e) => {
                     log_sender.send(format!("[server/lib.rs] Invalid base64 image: {}", e)).ok();
@@ -100,7 +101,7 @@ async fn infer(
                 }
             };
 
-            let tensor = tensor::jpeg_to_squeezenet_tensor(image_bytes);
+            let tensor = tensor::jpeg_to_raw_bgr(image_bytes, &log_sender)?;
             UnifiedRequest::Image(InferenceRequest {
                 model: api_request.model.clone(),
                 tensor_bytes: tensor,
@@ -218,8 +219,14 @@ pub async fn start_server(port: u16, wasm_module_path: String) -> anyhow::Result
     let log_tx_inference = log_tx.clone();
     tokio::spawn(async move {
         log_tx_inference.send("Inference thread is active and working.".to_string()).ok();
-        let engine = Arc::new(Engine::new(&Config::new()).unwrap());
-        let module = Arc::new(Component::from_file(&engine, Path::new(&wasm_module_path)).unwrap());
+        let engine = Arc::new(WasmEngine::new(&Config::new()).unwrap());
+        
+        // Load text inference component
+        let text_component = Arc::new(Component::from_file(&engine, Path::new(&wasm_module_path)).unwrap());
+        
+        // Load image inference module
+        let image_module_path = "../target/wasm32-wasip1/release/image_inferencer.wasm";
+        let image_module = Arc::new(Module::from_file(&engine, Path::new(image_module_path)).unwrap());
         
         // Load tokenizer for text inference
         let tokenizer_path = "./models/onnx/llama3.1-8b-instruct/tokenizer.json";
@@ -233,25 +240,26 @@ pub async fn start_server(port: u16, wasm_module_path: String) -> anyhow::Result
         
         while let Some(request) = rx.recv().await {
             let engine = Arc::clone(&engine);
-            let module = Arc::clone(&module);
+            let text_component = Arc::clone(&text_component);
+            let image_module = Arc::clone(&image_module);
             let tokenizer = tokenizer.clone();
             let log_tx_clone = log_tx_inference.clone();
             
             spawn_blocking(move || -> anyhow::Result<()> {
                 match request {
                     UnifiedRequest::Image(image_req) => {
-                        // Handle image inference (currently incomplete)
+                        // Handle image inference using cascadia-demo runtime
                         log_tx_clone.send("Processing image inference...".to_string()).ok();
-                        // For image inference, we need a placeholder tokenizer
-                        let placeholder_tokenizer = tokenizers::tokenizer::Tokenizer::from_bytes(b"{}").unwrap_or_else(|_| 
-                            tokenizers::tokenizer::Tokenizer::new(tokenizers::models::wordpiece::WordPiece::default())
-                        );
-                        let instance = WasmInstance::new(engine, module, &image_req.model, log_tx_clone.clone(), placeholder_tokenizer)?;
-                        // TODO: Implement image inference
-                        // let result = instance.infer(image_req.tensor_bytes)?;
+                        
+                        // Create cascadia-demo style WASM instance
+                        let mut image_instance = image_runtime::WasmInstance::new(engine, image_module)?;
+                        
+                        // Use the tensor bytes directly - they're already processed by tensor::jpeg_to_raw_bgr
+                        let result = image_instance.infer(image_req.tensor_bytes)?;
+                        
                         let response_data = ApiResponseData::Image { 
-                            label: 0, // TODO: Actual inference
-                            probability: 0.0 
+                            label: result.0,
+                            probability: result.1 
                         };
                         let _ = image_req.responder.send(response_data);
                         Ok(())
@@ -263,7 +271,7 @@ pub async fn start_server(port: u16, wasm_module_path: String) -> anyhow::Result
                         if let Some(ref tokenizer) = tokenizer {
                             log_tx_clone.send("[TEST_MESSAGE] This should appear in frontend logs immediately".to_string()).ok();
                             log_tx_clone.send("[DEBUG] About to start text inference with streaming".to_string()).ok();
-                            let mut instance = WasmInstance::new(engine, module, &text_req.model, log_tx_clone.clone(), tokenizer.clone())?;
+                            let mut instance = WasmInstance::new(engine, text_component, &text_req.model, log_tx_clone.clone(), tokenizer.clone())?;
                             match instance.infer_text(&text_req.prompt, &text_req.params, Some(log_tx_clone.clone())) {
                                 Ok(response_text) => {
                                     log_tx_clone.send("[TEXT_DONE]".to_string()).ok();

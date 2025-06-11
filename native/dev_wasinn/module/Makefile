@@ -25,6 +25,9 @@ clean:
 inferencer-build: 
 	@cd inferencer && cargo component build --release
 
+image-inferencer-build:
+	@cd image-inferencer && cargo build --target wasm32-wasip1 --release
+
 server-build:
 	@cd server && cargo build --release
 
@@ -36,3 +39,8 @@ format:
 
 lint:
 	@cargo clippy --all-targets --all-features -- -D warnings
+
+dev: inferencer-build image-inferencer-build server-build
+	@cd server && cargo run --bin server
+
+build: inferencer-build image-inferencer-build server-build

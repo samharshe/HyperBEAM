@@ -28,7 +28,7 @@ serde_json = "1.0.140"
 wasmtime = {path="../../wasmtime/crates/wasmtime", features = ["component-model"] }
 anyhow = "1.0.98"
 wasmtime-wasi = {path="../../wasmtime/crates/wasi"}
-wasmtime-wasi-nn = { path="../../wasmtime/crates/wasi-nn", features = ["onnx"] }
+wasmtime-wasi-nn = { path="../../wasmtime/crates/wasi-nn", features = ["onnx", "openvino"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 futures = "0.3"

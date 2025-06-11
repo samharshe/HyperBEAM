@@ -9,6 +9,3 @@ wit-bindgen-rt = "0.42.1"
 
 [lib]
 crate-type = ["cdylib"]
-
-[workspace]
-
