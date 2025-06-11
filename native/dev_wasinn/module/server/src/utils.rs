@@ -12,6 +12,22 @@ pub fn full<T: Into<Bytes>>(chunk: T) -> BoxBody
     Full::new(chunk.into()).map_err(|never| match never {}).boxed()
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextGenerationParams {
+    #[serde(default = "default_max_tokens")]
+    pub max_tokens: u32,
+}
+
+fn default_max_tokens() -> u32 { 50 }
+
+impl Default for TextGenerationParams {
+    fn default() -> Self {
+        Self {
+            max_tokens: default_max_tokens(),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct InferenceResult(pub u32, pub f32);
 
@@ -34,6 +50,7 @@ pub struct TextRequest
 {
     pub model: String,
     pub prompt: String,
+    pub params: TextGenerationParams,
     pub responder: oneshot::Sender<ApiResponseData>,
 }
 
@@ -55,7 +72,11 @@ pub struct ApiRequest {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ApiRequestData {
-    Text { prompt: String },
+    Text { 
+        prompt: String,
+        #[serde(flatten)]
+        params: TextGenerationParams,
+    },
     Image { image: String }, // Base64 encoded image
 }
 

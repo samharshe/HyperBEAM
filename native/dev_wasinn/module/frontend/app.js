@@ -59,6 +59,9 @@ chatForm.addEventListener('submit', async function(e) {
     const userMessage = userPromptInput.value.trim();
     if (!userMessage) return;
     
+    const maxTokensInput = document.getElementById('max-tokens');
+    const maxTokens = parseInt(maxTokensInput.value) || 50;
+    
     logElement.innerHTML = '';
     
     addMessage(userMessage, true);
@@ -115,7 +118,8 @@ chatForm.addEventListener('submit', async function(e) {
             },
             body: JSON.stringify({
                 model: modelName,
-                prompt: userMessage
+                prompt: userMessage,
+                max_tokens: maxTokens
             })
         });
         

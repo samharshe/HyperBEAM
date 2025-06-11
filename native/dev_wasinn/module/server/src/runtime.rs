@@ -108,7 +108,7 @@ impl WasmInstance
         })
     }
 
-    pub fn register(&mut self) -> anyhow::Result<u64>
+    pub fn register(&mut self, max_tokens: u32) -> anyhow::Result<u64>
     {
         use crate::ncl_ml::types::SessionConfig;
         
@@ -116,7 +116,7 @@ impl WasmInstance
         let config = SessionConfig {
             model_id: self.registry_id.clone(),
             history: None,
-            max_token: Some(50),
+            max_token: Some(max_tokens as u16),
         };
         
         // Register session with WASM component
@@ -164,7 +164,7 @@ impl WasmInstance
     }
 
     /// Complete text inference from prompt to response text
-    pub fn infer_text(&mut self, user_prompt: &str, log_sender: Option<tokio::sync::broadcast::Sender<String>>) -> anyhow::Result<String>
+    pub fn infer_text(&mut self, user_prompt: &str, params: &crate::utils::TextGenerationParams, log_sender: Option<tokio::sync::broadcast::Sender<String>>) -> anyhow::Result<String>
     {
         // Format the prompt with system message template
         let prompt = format!(r#"<|begin_of_text|><|start_header_id|>system<|end_header_id|>
@@ -180,7 +180,7 @@ You are a helpful assistant<|eot_id|><|start_header_id|>user<|end_header_id|>
         eprintln!("DEBUG runtime: Tokenized to {} tokens", ids.len());
         
         // Register a session if we don't have one, or reuse existing
-        let session_id = self.register()?;
+        let session_id = self.register(params.max_tokens)?;
         
         // Run inference
         if let Some(ref sender) = log_sender {

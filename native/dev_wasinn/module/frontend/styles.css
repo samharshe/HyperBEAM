@@ -76,6 +76,7 @@ h1 {
     position: relative;
 }
 
+
 .input-container {
     position: absolute;
     bottom: 16px;
@@ -94,6 +95,34 @@ h1 {
     border: 1px solid var(--color-primary-electric);
     background: var(--color-primary-pure-white);
     flex: 1;
+}
+
+.max-tokens-container {
+    display: flex;
+    align-items: center;
+    border-radius: 8px;
+    border: 1px solid var(--color-primary-electric);
+    background: var(--color-primary-pure-white);
+    padding: 8px;
+    gap: 4px;
+}
+
+.max-tokens-label {
+    font-family: monospace;
+    color: var(--color-primary-dark-blue);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+#max-tokens {
+    font-family: monospace;
+    border: none;
+    background: transparent;
+    width: 40px;
+    text-align: center;
+    outline: none;
+    color: var(--color-primary-dark-blue);
 }
 
 .send-button {

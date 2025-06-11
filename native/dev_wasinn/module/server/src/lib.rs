@@ -71,11 +71,12 @@ async fn infer(
     // Convert API request to internal request and send to inference thread
     let (sender, receiver) = oneshot::channel();
     let internal_request = match api_request.data {
-        ApiRequestData::Text { prompt } => {
+        ApiRequestData::Text { prompt, params } => {
             log_sender.send(format!("[server/lib.rs] Processing text inference: {}", prompt)).ok();
             UnifiedRequest::Text(TextRequest {
                 model: api_request.model.clone(),
                 prompt,
+                params,
                 responder: sender,
             })
         },
@@ -263,7 +264,7 @@ pub async fn start_server(port: u16, wasm_module_path: String) -> anyhow::Result
                             log_tx_clone.send("[TEST_MESSAGE] This should appear in frontend logs immediately".to_string()).ok();
                             log_tx_clone.send("[DEBUG] About to start text inference with streaming".to_string()).ok();
                             let mut instance = WasmInstance::new(engine, module, &text_req.model, log_tx_clone.clone(), tokenizer.clone())?;
-                            match instance.infer_text(&text_req.prompt, Some(log_tx_clone.clone())) {
+                            match instance.infer_text(&text_req.prompt, &text_req.params, Some(log_tx_clone.clone())) {
                                 Ok(response_text) => {
                                     log_tx_clone.send("[TEXT_DONE]".to_string()).ok();
                                     log_tx_clone.send("[TEST_MESSAGE] Text inference just completed successfully".to_string()).ok();
