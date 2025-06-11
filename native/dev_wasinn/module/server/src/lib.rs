@@ -44,7 +44,7 @@ async fn infer(
     log_sender: tokio::sync::broadcast::Sender<String>,
 ) -> Result<Response<BoxBody>>
 {
-    log_sender.send("[server/main.rs] Received inference request.".to_string()).ok();
+    log_sender.send("[server/lib.rs] Received inference request.".to_string()).ok();
 
     // Parse JSON body
     let mut body = request.collect().await?.aggregate();
@@ -53,7 +53,7 @@ async fn infer(
     let api_request: ApiRequest = match serde_json::from_slice(&body_bytes) {
         Ok(req) => req,
         Err(e) => {
-            log_sender.send(format!("[server/main.rs] Invalid JSON request: {}", e)).ok();
+            log_sender.send(format!("[server/lib.rs] Invalid JSON request: {}", e)).ok();
             let error = ApiError {
                 error: "invalid_request".to_string(),
                 message: format!("Invalid JSON: {}", e),
@@ -66,13 +66,13 @@ async fn infer(
         }
     };
 
-    log_sender.send(format!("[server/main.rs] Processing request for model: {}", api_request.model)).ok();
+    log_sender.send(format!("[server/lib.rs] Processing request for model: {}", api_request.model)).ok();
 
     // Convert API request to internal request and send to inference thread
     let (sender, receiver) = oneshot::channel();
     let internal_request = match api_request.data {
         ApiRequestData::Text { prompt } => {
-            log_sender.send(format!("[server/main.rs] Processing text inference: {}", prompt)).ok();
+            log_sender.send(format!("[server/lib.rs] Processing text inference: {}", prompt)).ok();
             UnifiedRequest::Text(TextRequest {
                 model: api_request.model.clone(),
                 prompt,
@@ -80,13 +80,13 @@ async fn infer(
             })
         },
         ApiRequestData::Image { image } => {
-            log_sender.send("[server/main.rs] Processing image inference.".to_string()).ok();
+            log_sender.send("[server/lib.rs] Processing image inference.".to_string()).ok();
             
             // Decode base64 image
             let image_bytes = match base64::decode(&image) {
                 Ok(bytes) => bytes,
                 Err(e) => {
-                    log_sender.send(format!("[server/main.rs] Invalid base64 image: {}", e)).ok();
+                    log_sender.send(format!("[server/lib.rs] Invalid base64 image: {}", e)).ok();
                     let error = ApiError {
                         error: "invalid_image".to_string(),
                         message: format!("Invalid base64 encoding: {}", e),
@@ -110,13 +110,13 @@ async fn infer(
 
     // Send request to inference thread
     inference_thread_sender.send(internal_request)?;
-    log_sender.send("[server/main.rs] Passed request to inferencer. Waiting for result.".to_string()).ok();
+    log_sender.send("[server/lib.rs] Passed request to inferencer. Waiting for result.".to_string()).ok();
 
     // Wait for response
     match receiver.await {
         Ok(api_response) => {
             let json = serde_json::to_string(&api_response).unwrap();
-            log_sender.send("[server/main.rs] Inference successful.".to_string()).ok();
+            log_sender.send("[server/lib.rs] Inference successful.".to_string()).ok();
             
             Ok(Response::builder()
                 .header(header::CONTENT_TYPE, "application/json")
@@ -124,7 +124,7 @@ async fn infer(
                 .unwrap())
         },
         Err(_) => {
-            log_sender.send("[server/main.rs] Inference task failed or channel closed.".to_string()).ok();
+            log_sender.send("[server/lib.rs] Inference task failed or channel closed.".to_string()).ok();
             let error = ApiError {
                 error: "inference_failed".to_string(),
                 message: "Inference failed".to_string(),
@@ -188,7 +188,7 @@ async fn serve(
         (&Method::POST, "/infer") => infer(request, inference_thread_sender, log_sender.clone()).await?,
         _ => {
             log_sender
-                .send(format!("[server/main.rs] Unhandled request: {} {}", request.method(), request.uri().path()))
+                .send(format!("[server/lib.rs] Unhandled request: {} {}", request.method(), request.uri().path()))
                 .ok();
             Response::builder().status(StatusCode::NOT_FOUND).body(full(NOT_FOUND)).unwrap()
         },
