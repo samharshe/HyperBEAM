@@ -6,5 +6,5 @@ async fn main() -> anyhow::Result<()> {
     
     let wasm_module_path = "../inferencer/target/wasm32-wasip1/release/ncl_ml.wasm".to_string();
     
-    server::start_server(3000, wasm_module_path).await
+    server::start_server(3001, wasm_module_path).await
 }
