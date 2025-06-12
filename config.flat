@@ -1,1 +1,3 @@
-port: 10000
+port: 9001
+mode: debug
+priv_key_location: ./hyperbeam-key.json

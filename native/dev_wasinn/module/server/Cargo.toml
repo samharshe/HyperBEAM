@@ -1,0 +1,40 @@
+[package]
+name = "server"
+edition = "2021"
+version = "0.1.0"
+authors = ["Saam Tehrani"]
+
+[lib]
+name = "server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+[[bin]]
+name = "http_server"
+path = "src/http_main.rs"
+
+[dependencies]
+tokio = { version = "1.45.0", features = ["io-util", "macros", "rt", "rt-multi-thread", "sync", "time", "full"] }
+hyper = { version = "1.6", features = ["full"] }
+hyper-util = { version = "0.1.11", features = ["full"] }
+http-body-util = { version = "0.1.3", features = ["full"] }
+bytes = "1.10.1"
+image = { version = "0.25.6", features = ["jpeg"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+wasmtime = {path="../../wasmtime/crates/wasmtime", features = ["component-model"] }
+anyhow = "1.0.98"
+wasmtime-wasi = {path="../../wasmtime/crates/wasi"}
+wasmtime-wasi-nn = { path="../../wasmtime/crates/wasi-nn", features = ["onnx", "openvino"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+futures = "0.3"
+tokio-stream = { version = "0.1", features = ["sync"] }
+opencv = "0.94.4"
+tokenizers = "0.21.1"
+ndarray = "0.16.1"
+bytemuck = "1.23.0"
+base64 = "0.22"

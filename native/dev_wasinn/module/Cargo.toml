@@ -1,0 +1,3 @@
+[workspace]
+members = ["server", "nif", "inferencer", "image-inferencer"]
+resolver = "2"

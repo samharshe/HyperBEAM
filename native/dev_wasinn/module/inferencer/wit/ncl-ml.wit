@@ -1,0 +1,41 @@
+package ncl:ml@0.1.0;
+
+world ml {
+    export chatbot;
+    import token-generator;
+}
+
+interface chatbot {
+    use types.{session-id, session-config, errors};
+    infer: func(session: session-id, prompt: list<s64>) -> result<_, errors>;
+    register: func(config: session-config) -> session-id;
+}
+
+interface token-generator {
+    use types.{token-id, session-id};
+    generate: func(session: session-id, token: token-id) -> u32;
+}
+
+
+interface types {
+    // assuming size_of(u32) as max vocabulary size
+    type token-id = u32;
+
+    // sessions unique identifier
+    type session-id = u64;
+
+
+    // configurations for a session
+    record session-config {
+        model-id: string,
+        history: option<list<u8>>,
+        max-token: option<u16>,
+    }
+
+    enum errors {
+        // invalid session-id.
+        invalid-session,
+        // Host indicating that guest should abort the session.
+        abort-session
+    }
+}

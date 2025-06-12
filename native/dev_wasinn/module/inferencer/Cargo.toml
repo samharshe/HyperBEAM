@@ -1,0 +1,11 @@
+[package]
+name = "ncl-ml"
+authors = ["Saam Tehrani"]
+edition = "2021"
+
+[dependencies]
+wit-bindgen = "0.42.1"
+wit-bindgen-rt = "0.42.1"
+
+[lib]
+crate-type = ["cdylib"]
