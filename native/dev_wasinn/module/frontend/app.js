@@ -178,7 +178,7 @@ document.querySelectorAll('.gallery img').forEach(img => {
                 reader.readAsDataURL(blob);
             });
             
-            const modelName = 'squeezenet1.1-7';
+            const modelName = 'mobilenet';
             const serverResponse = await fetch(serverURL + "/infer", {
                 method: 'POST',
                 headers: {

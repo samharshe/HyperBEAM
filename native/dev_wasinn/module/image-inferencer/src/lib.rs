@@ -1,4 +1,5 @@
 use log::{error, warn, info};
+use std::sync::OnceLock;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct InferenceResult(pub usize, pub f32);
@@ -208,4 +209,122 @@ impl MobilnetModel {
     pub fn run_inference_compat(&self, tensor: wasi_nn::Tensor) -> Result<Option<InferenceResult>, String> {
         <Model<ImageNetConfig>>::run_inference(self, tensor)
     }
+}
+
+// Static model storage for FFI interface
+static MODEL: OnceLock<MobilnetModel> = OnceLock::new();
+
+// Load model from filesystem (fixture directory)
+fn load_model_fs() -> Result<(), String> {
+    eprintln!("WASM DEBUG: load_model_fs() called");
+    
+    // Load XML file
+    eprintln!("WASM DEBUG: About to read ./fixture/model.xml");
+    let xml = std::fs::read("./fixture/model.xml")
+        .map_err(|e| format!("Failed to read model.xml: {}", e))?;
+    eprintln!("WASM DEBUG: Successfully read XML file, {} bytes", xml.len());
+    
+    // Load weights file  
+    eprintln!("WASM DEBUG: About to read ./fixture/model.bin");
+    let weights = std::fs::read("./fixture/model.bin")
+        .map_err(|e| format!("Failed to read model.bin: {}", e))?;
+    eprintln!("WASM DEBUG: Successfully read weights file, {} bytes", weights.len());
+    
+    info!("Loading model from filesystem - XML: {} bytes, weights: {} bytes", xml.len(), weights.len());
+    
+    eprintln!("WASM DEBUG: About to call MobilnetModel::from_buffer_result");
+    // Create model
+    let model = MobilnetModel::from_buffer_result(xml, weights)?;
+    eprintln!("WASM DEBUG: Model created successfully");
+    
+    // Store in static variable
+    eprintln!("WASM DEBUG: About to store model in static variable");
+    MODEL.set(model).map_err(|_| "Failed to store model in static variable".to_string())?;
+    eprintln!("WASM DEBUG: Model stored successfully");
+    
+    info!("Model loaded successfully from filesystem");
+    Ok(())
+}
+
+// FFI exports matching cascadia-demo interface
+#[no_mangle]
+pub extern "C" fn load_model(xml_ptr: i32, xml_len: i32, weights_ptr: i32, weights_len: i32) -> i32 {
+    // Check if model is already loaded
+    if MODEL.get().is_some() {
+        info!("Model already loaded");
+        return 1; // Already loaded
+    }
+
+    // Extract XML buffer from WASM memory
+    let xml_slice = unsafe {
+        std::slice::from_raw_parts(xml_ptr as *const u8, xml_len as usize)
+    };
+    let xml = xml_slice.to_vec();
+
+    // Extract weights buffer from WASM memory  
+    let weights_slice = unsafe {
+        std::slice::from_raw_parts(weights_ptr as *const u8, weights_len as usize)
+    };
+    let weights = weights_slice.to_vec();
+
+    info!("Loading model with XML size: {}, weights size: {}", xml.len(), weights.len());
+
+    // Create model
+    match MobilnetModel::from_buffer_result(xml, weights) {
+        Ok(model) => {
+            match MODEL.set(model) {
+                Ok(_) => {
+                    info!("Model loaded successfully");
+                    0 // Success
+                },
+                Err(_) => {
+                    error!("Failed to store model in static variable");
+                    -1 // Error
+                }
+            }
+        },
+        Err(e) => {
+            error!("Failed to create model: {}", e);
+            -1 // Error
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn infer(_tensor_ptr: i32, tensor_len: i32, result_ptr: i32) -> i32 {
+    eprintln!("WASM DEBUG: infer function called with tensor_len: {}", tensor_len);
+    info!("WASM infer function called with tensor_len: {}", tensor_len);
+    
+    eprintln!("WASM DEBUG: About to check MODEL.get()");
+    
+    // Test model loading
+    match MODEL.get() {
+        Some(_) => {
+            eprintln!("WASM DEBUG: Model already loaded");
+            info!("Model already loaded");
+        },
+        None => {
+            eprintln!("WASM DEBUG: Model not loaded, skipping model loading for now");
+            info!("Model not loaded, skipping model loading for testing");
+            // Skip model loading for now - just proceed with dummy result
+        }
+    }
+    
+    eprintln!("WASM DEBUG: About to create dummy result");
+    
+    // Still return dummy result (skip actual inference)
+    let label_bytes = (42u32).to_le_bytes();
+    let confidence_bytes = (0.95f32).to_le_bytes();
+    
+    eprintln!("WASM DEBUG: About to write to memory at result_ptr: {}", result_ptr);
+    
+    unsafe {
+        let result_slice = std::slice::from_raw_parts_mut(result_ptr as *mut u8, 8);
+        result_slice[0..4].copy_from_slice(&label_bytes);
+        result_slice[4..8].copy_from_slice(&confidence_bytes);
+    }
+    
+    eprintln!("WASM DEBUG: About to return success");
+    info!("WASM infer returning dummy result");
+    0
 }
