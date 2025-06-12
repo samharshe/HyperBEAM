@@ -138,99 +138,101 @@ chatForm.addEventListener('submit', async function(e) {
     }
 });
 
-const outputElement = document.querySelector('.model-output');
-const logElement = document.querySelector('.under-the-hood-logs');
+// const outputElement = document.querySelector('.model-output');
+// const logElement = document.querySelector('.under-the-hood-logs');
 
-const eventSource = new EventSource(serverURL + "/logs");
+// const eventSource = new EventSource(serverURL + "/logs");
 
-eventSource.onopen = (event) => {
-    logElement.innerHTML += `${new Date().toLocaleTimeString('en-US', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'})}.${new Date().getMilliseconds().toString().padStart(3, '0').slice(0, 2)}: SSE connection opened.<br>`;
-    console.log("SSE connection opened:", event);
-};
+// eventSource.onopen = (event) => {
+//     logElement.innerHTML += `${new Date().toLocaleTimeString('en-US', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'})}.${new Date().getMilliseconds().toString().padStart(3, '0').slice(0, 2)}: SSE connection opened.<br>`;
+//     console.log("SSE connection opened:", event);
+// };
 
-eventSource.onmessage = (event) => {
-    logElement.innerHTML = `${new Date().toLocaleTimeString('en-US', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'})}.${new Date().getMilliseconds().toString().padStart(3, '0').slice(0, 2)}: ${event.data}<br>` + logElement.innerHTML;
-    logElement.scrollTop = logElement.scrollHeight;
-};
+// eventSource.onmessage = (event) => {
+//     logElement.innerHTML = `${new Date().toLocaleTimeString('en-US', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'})}.${new Date().getMilliseconds().toString().padStart(3, '0').slice(0, 2)}: ${event.data}<br>` + logElement.innerHTML;
+//     logElement.scrollTop = logElement.scrollHeight;
+// };
 
-eventSource.onerror = (err) => {
-    console.error("SSE Error:", err);
-};
+// eventSource.onerror = (err) => {
+//     console.error("SSE Error:", err);
+// };
 
-document.querySelectorAll('.gallery img').forEach(img => {
-    img.addEventListener('click', async function() {
-        logElement.innerHTML = '';
-        outputElement.innerHTML = `Processing...`;
+// HERE
 
-        logElement.innerHTML += `${new Date().toLocaleTimeString('en-US', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'})}.${new Date().getMilliseconds().toString().padStart(3, '0').slice(0, 2)}: [frontend/app.js] Sending inference request for ${this.alt || 'image'}.<br>`;
+// document.querySelectorAll('.gallery img').forEach(img => {
+//     img.addEventListener('click', async function() {
+//         logElement.innerHTML = '';
+//         outputElement.innerHTML = `Processing...`;
 
-        try {
-            const response = await fetch(this.src);
-            const blob = await response.blob();
+//         logElement.innerHTML += `${new Date().toLocaleTimeString('en-US', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'})}.${new Date().getMilliseconds().toString().padStart(3, '0').slice(0, 2)}: [frontend/app.js] Sending inference request for ${this.alt || 'image'}.<br>`;
+
+//         try {
+//             const response = await fetch(this.src);
+//             const blob = await response.blob();
             
-            const base64 = await new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                    // Remove the "data:image/jpeg;base64," prefix
-                    const base64 = reader.result.split(',')[1];
-                    resolve(base64);
-                };
-                reader.readAsDataURL(blob);
-            });
+//             const base64 = await new Promise((resolve) => {
+//                 const reader = new FileReader();
+//                 reader.onload = () => {
+//                     // Remove the "data:image/jpeg;base64," prefix
+//                     const base64 = reader.result.split(',')[1];
+//                     resolve(base64);
+//                 };
+//                 reader.readAsDataURL(blob);
+//             });
             
-            const modelName = 'mobilenet';
-            const serverResponse = await fetch(serverURL + "/infer", {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: modelName,
-                    image: base64
-                })
-            });
+//             const modelName = 'mobilenet';
+//             const serverResponse = await fetch(serverURL + "/infer", {
+//                 method: 'POST',
+//                 headers: {
+//                     'Content-Type': 'application/json'
+//                 },
+//                 body: JSON.stringify({
+//                     model: modelName,
+//                     image: base64
+//                 })
+//             });
             
-            if (!serverResponse.ok) {
-                const errorText = await serverResponse.text();
-                throw new Error(`Server responded with status ${serverResponse.status}: ${errorText}`);
-            }
+//             if (!serverResponse.ok) {
+//                 const errorText = await serverResponse.text();
+//                 throw new Error(`Server responded with status ${serverResponse.status}: ${errorText}`);
+//             }
 
-            const result = await serverResponse.json();
-            const label = result?.label ?? 'unknown';
-            const confidence = result?.probability ?? 0;
+//             const result = await serverResponse.json();
+//             const label = result?.label ?? 'unknown';
+//             const confidence = result?.probability ?? 0;
 
-            outputElement.innerHTML = `${modelName} identified a ${label} with ${(confidence*100).toFixed(2)}% confidence.`;
+//             outputElement.innerHTML = `${modelName} identified a ${label} with ${(confidence*100).toFixed(2)}% confidence.`;
             
-        } catch (error) {
-            console.error(error);
-            outputElement.innerHTML = `Error processing image: ${error.message || error}. Please try again.`;
-        }
-    });
-});
+//         } catch (error) {
+//             console.error(error);
+//             outputElement.innerHTML = `Error processing image: ${error.message || error}. Please try again.`;
+//         }
+//     });
+// });
 
-const lastImage = document.querySelector('.gallery img:last-child');
-lastImage.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    lastImage.style.border = '2px solid green';
-});
+// const lastImage = document.querySelector('.gallery img:last-child');
+// lastImage.addEventListener('dragover', (e) => {
+//     e.preventDefault();
+//     lastImage.style.border = '2px solid green';
+// });
 
-lastImage.addEventListener('dragleave', () => {
-    lastImage.style.border = '2px solid red';
-});
+// lastImage.addEventListener('dragleave', () => {
+//     lastImage.style.border = '2px solid red';
+// });
 
-lastImage.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    lastImage.style.border = '2px solid transparent';
+// lastImage.addEventListener('drop', async (e) => {
+//     e.preventDefault();
+//     lastImage.style.border = '2px solid transparent';
     
-    const file = e.dataTransfer.files[0];
-    if (file.type !== 'image/jpeg' && file.type !== 'image/jpg') {
-        alert('Please drop a JPEG/JPG image file.');
-        return;
-    }
+//     const file = e.dataTransfer.files[0];
+//     if (file.type !== 'image/jpeg' && file.type !== 'image/jpg') {
+//         alert('Please drop a JPEG/JPG image file.');
+//         return;
+//     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        lastImage.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-});
+//     const reader = new FileReader();
+//     reader.onload = (e) => {
+//         lastImage.src = e.target.result;
+//     };
+//     reader.readAsDataURL(file);
+// });
