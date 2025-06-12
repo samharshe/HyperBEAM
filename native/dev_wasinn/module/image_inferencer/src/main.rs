@@ -1,7 +1,7 @@
 use std::{fs, sync::OnceLock};
 use log::{error, warn, info};
 
-use inferencer::MobilnetModel;
+use image_inferencer::MobilnetModel;
 
 static MODEL: OnceLock<MobilnetModel> = OnceLock::new();
 

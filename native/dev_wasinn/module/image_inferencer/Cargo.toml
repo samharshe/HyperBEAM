@@ -1,5 +1,5 @@
 [package]
-name = "inferencer"
+name = "image_inferencer"
 version = "0.0.0"
 authors = ["Saam Tehrani"]
 edition = "2021"
