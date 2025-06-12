@@ -179,7 +179,7 @@ pub async fn main() -> anyhow::Result<()>
         log_tx_inference.send("Inference thread is active and working.".to_string()).ok();
         let engine = Arc::new(Engine::new(&Config::new()).unwrap());
         let module =
-            Arc::new(Module::from_file(&engine, Path::new("../target/wasm32-wasip1/debug/inferencer.wasm")).unwrap());
+            Arc::new(Module::from_file(&engine, Path::new("../target/wasm32-wasip1/debug/image_inferencer.wasm")).unwrap());
         while let Some(request) = rx.recv().await {
             let engine = Arc::clone(&engine);
             let module = Arc::clone(&module);

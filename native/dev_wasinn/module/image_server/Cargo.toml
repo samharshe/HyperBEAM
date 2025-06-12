@@ -1,5 +1,5 @@
 [package]
-name = "server"
+name = "image_server"
 version = "0.0.0"
 authors = ["Saam Tehrani"]
 edition = "2021" 
