@@ -1,8 +1,8 @@
 use std::{path::Path, sync::Arc};
 
 use anyhow::Result;
-use wasmtime::{Engine as WasmEngine, Instance, Linker, Memory, Module, Store};
-use wasmtime_wasi::{preview1::WasiP1Ctx, p2::WasiCtxBuilder, DirPerms, FilePerms};
+use wasmtime::{Engine, Instance, Linker, Memory, Module, Store};
+use wasmtime_wasi::{preview1::WasiP1Ctx, DirPerms, FilePerms, WasiCtxBuilder};
 use wasmtime_wasi_nn::{backend::openvino::OpenvinoBackend, witx::WasiNnCtx, Backend, InMemoryRegistry};
 
 use super::utils::InferenceResult;
@@ -15,15 +15,16 @@ struct Context
 
 impl Context
 {
-    fn new(preopen_dir: &Path, _preload_model: bool, mut backend: Backend) -> Result<Self>
+    fn new(preopen_dir: &Path, preload_model: bool, mut backend: Backend) -> Result<Self>
     {
         let mut builder = WasiCtxBuilder::new();
         builder.inherit_stdio().preopened_dir(preopen_dir, "fixture", DirPerms::READ, FilePerms::READ)?;
         let wasi = builder.build_p1();
 
         let mut registry = InMemoryRegistry::new();
-        // Preload models using cascadia-demo pattern
-        registry.load((backend).as_dir_loadable().unwrap(), preopen_dir)?;
+        if preload_model {
+            registry.load((backend).as_dir_loadable().unwrap(), preopen_dir)?;
+        }
         let wasi_nn = WasiNnCtx::new([backend], registry.into());
 
         Ok(Self {
@@ -42,7 +43,7 @@ pub struct WasmInstance
 
 impl WasmInstance
 {
-    pub fn new(engine: Arc<WasmEngine>, module: Arc<Module>) -> anyhow::Result<WasmInstance>
+    pub fn new(engine: Arc<Engine>, module: Arc<Module>) -> anyhow::Result<WasmInstance>
     {
         let path = Path::new("./fixture");
         let mut store =

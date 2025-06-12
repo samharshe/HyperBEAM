@@ -209,34 +209,3 @@ impl MobilnetModel {
         <Model<ImageNetConfig>>::run_inference(self, tensor)
     }
 }
-
-// FFI exports for inference only - models loaded via registry
-// No model storage needed since registry handles this
-
-#[no_mangle]
-pub extern "C" fn infer(tensor_ptr: i32, tensor_len: i32, result_ptr: i32) -> i32 {
-    eprintln!("WASM DEBUG: infer function called with tensor_len: {}", tensor_len);
-    info!("WASM infer function called with tensor_len: {}", tensor_len);
-    
-    // Extract tensor data from WASM memory
-    let tensor_raw = unsafe { 
-        std::slice::from_raw_parts(tensor_ptr as *const u8, tensor_len as usize) 
-    };
-    
-    // Use WASI-NN directly via registry (no static model storage)
-    // Note: wasi-nn 0.1.0 doesn't have load_by_name, fall back to dummy for now
-    eprintln!("WASM DEBUG: Registry pattern - returning dummy result for testing");
-    
-    // Return dummy result to test registry pattern works
-    let label_bytes = (42u32).to_le_bytes();
-    let confidence_bytes = (0.95f32).to_le_bytes();
-    
-    unsafe {
-        let result_slice = std::slice::from_raw_parts_mut(result_ptr as *mut u8, 8);
-        result_slice[0..4].copy_from_slice(&label_bytes);
-        result_slice[4..8].copy_from_slice(&confidence_bytes);
-    }
-    
-    info!("WASM registry pattern test completed");
-    0
-}
